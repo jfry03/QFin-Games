@@ -31,17 +31,27 @@ REPO="$1"; APPDIR="$2"; SERVICE="$3"; BRANCH="$4"
 
 cd "$APPDIR"
 
+# /opt/imposter is owned by the 'imposter' user but this runs as root; without
+# this git refuses with "dubious ownership". Idempotent.
+git config --global --get-all safe.directory 2>/dev/null | grep -qxF "$APPDIR" \
+  || git config --global --add safe.directory "$APPDIR"
+
 # First run: turn the existing directory into a git checkout of the repo.
 if [ ! -d .git ]; then
   echo "   first run: initializing git tracking in $APPDIR"
   git init -q
+fi
+
+# Ensure the 'origin' remote exists and points at the right URL (add or update).
+if git remote get-url origin >/dev/null 2>&1; then
+  git remote set-url origin "$REPO"
+else
   git remote add origin "$REPO"
 fi
 
-# Make sure the remote URL is current, then fetch + hard-reset to the branch.
+# Fetch + hard-reset to the branch.
 # Hard reset means the server always mirrors GitHub exactly (any manual edits
 # made directly on the server are discarded — commit changes via GitHub instead).
-git remote set-url origin "$REPO"
 echo "   fetching latest..."
 git fetch -q origin "$BRANCH"
 git reset -q --hard "origin/$BRANCH"
