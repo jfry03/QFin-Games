@@ -105,6 +105,17 @@
   .seg-btn.on { border-color: var(--accent2); background: rgba(108, 92, 231, 0.35); color: var(--text); }
   .seg-btn:disabled { cursor: default; opacity: 0.7; }
 
+  /* Off-word distribution chart (lobby) */
+  .dist-chart { display: flex; align-items: flex-end; gap: 5px; height: 96px; margin: 12px 0 2px; }
+  .dist-col { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; height: 100%; }
+  .dist-pct { font-size: 0.62rem; color: var(--muted); margin-bottom: 3px; white-space: nowrap; }
+  .dist-bar { width: 100%; background: var(--accent); border-radius: 5px 5px 0 0; min-height: 2px; transition: height 0.12s; }
+  .dist-bar.zero { background: #6b6c94; }
+  .dist-xaxis { display: flex; gap: 5px; margin-bottom: 10px; }
+  .dist-xaxis .dist-col { font-size: 0.72rem; color: var(--muted); }
+  .dist-slider-lbl { display: flex; justify-content: space-between; font-weight: 600; margin: 12px 0 4px; font-size: 0.9rem; }
+  .dist-slider-lbl .v { color: var(--accent2); font-weight: 700; }
+
   /* Lobby */
   .code-badge {
     background: var(--card); border-radius: var(--radius); padding: 18px; text-align: center;
@@ -266,6 +277,16 @@
         <button id="rPlus">+</button>
       </div>
       <div class="hint">How many times clue-giving goes around the circle before the vote.</div>
+    </div>
+    <div class="field hidden" id="distField">
+      <label>How many get an off word</label>
+      <div class="dist-chart" id="distChart"></div>
+      <div class="dist-xaxis" id="distXaxis"></div>
+      <div class="hint">Each round the number of players who get a nearby (not matching) word is drawn from this distribution. 0 means everyone matches.</div>
+      <div class="dist-slider-lbl"><span>Chance nobody's off</span><span class="v" id="pNoneVal">7%</span></div>
+      <input type="range" class="range" id="pNoneRange" min="0" max="60" step="1" value="7">
+      <div class="dist-slider-lbl"><span>Typical number off (λ)</span><span class="v" id="lambdaVal">0.91</span></div>
+      <input type="range" class="range" id="lambdaRange" min="20" max="300" step="1" value="91">
     </div>
     <label style="font-weight:600;margin-bottom:10px;display:block;">Players (<span id="pCount">0</span>)</label>
     <div class="players" id="playerList"></div>
@@ -458,6 +479,29 @@ function renderChat() {
   if (atBottom) log.scrollTop = log.scrollHeight;
 }
 
+// Probabilities of 0,1,2,3,4,5+ players getting an off word, under the same
+// zero-modified Poisson the server samples from. Mirrors imposter_distribution.png.
+function offPmf(pNone, lambda) {
+  const eL = Math.exp(-lambda);
+  const tail = (1 - eL) || 1e-9;
+  const fact = [1, 1, 2, 6, 24];
+  const probs = [pNone];
+  for (let k = 1; k <= 4; k++) probs.push((1 - pNone) * (eL * Math.pow(lambda, k) / fact[k]) / tail);
+  probs.push(Math.max(0, 1 - probs.reduce((a, b) => a + b, 0)));   // 5+
+  return probs;
+}
+
+function renderDistChart(pNone, lambda) {
+  const probs = offPmf(pNone, lambda);
+  const max = Math.max(...probs, 0.01);
+  const labels = ["0", "1", "2", "3", "4", "5+"];
+  $("distChart").innerHTML = probs.map((p, i) =>
+    '<div class="dist-col"><div class="dist-pct">' + Math.round(p * 100) + '%</div>' +
+    '<div class="dist-bar ' + (i === 0 ? "zero" : "") + '" style="height:' + Math.max(2, (p / max) * 72) + 'px"></div></div>'
+  ).join("");
+  $("distXaxis").innerHTML = labels.map(l => '<div class="dist-col">' + l + '</div>').join("");
+}
+
 function renderLobby() {
   showScreen("lobby");
   $("lobbyCode").textContent = state.code;
@@ -487,6 +531,18 @@ function renderLobby() {
   $("rDisp").textContent = state.laps;
   $("roundsVal").textContent = state.laps;
   $("rMinus").disabled = $("rPlus").disabled = !host;
+
+  // Off-word distribution — only relevant when assigning words in person.
+  $("distField").classList.toggle("hidden", !inPerson);
+  if (inPerson) {
+    const d = state.dist || { pNone: 0.07, lambda: 0.91 };
+    $("pNoneRange").value = Math.round(d.pNone * 100);
+    $("pNoneVal").textContent = Math.round(d.pNone * 100) + "%";
+    $("lambdaRange").value = Math.round(d.lambda * 100);
+    $("lambdaVal").textContent = d.lambda.toFixed(2);
+    $("pNoneRange").disabled = $("lambdaRange").disabled = !host;
+    renderDistChart(d.pNone, d.lambda);
+  }
   $("startBtn").classList.toggle("hidden", !host);
   $("waitHint").classList.toggle("hidden", host);
   if (host) {
@@ -669,18 +725,24 @@ function renderResult() {
   showScreen("result");
   const r = state.result || {};
   const b = $("resultBanner");
-  const rows = [
-    revealLine("Imposter", r.imposterName),
-    revealLine("Crew word", r.crewWord),
-    revealLine("Imposter's word", r.imposterWord),
-  ];
+  let rows;
   if (r.mode === "reveal") {
-    // In-person mode: no on-phone vote, so just reveal the truth — no winner.
+    // In-person "assign words" mode: no on-phone vote, just reveal the truth.
+    const odd = r.odd || [];
     b.className = "result-banner reveal-neutral";
-    b.textContent = "🎭 The reveal";
+    b.textContent = odd.length === 0 ? "🎭 Nobody was off"
+      : odd.length === 1 ? "🎭 One odd word" : "🎭 " + odd.length + " odd words";
+    rows = [revealLine("Main word", r.crewWord)];
+    if (odd.length === 0) rows.push(revealLine("Off words", "Everyone had the same word"));
+    else odd.forEach(o => rows.push(revealLine(o.name, o.word)));
   } else {
     b.className = "result-banner " + (r.winner === "crew" ? "crew" : "imposter");
     b.textContent = r.winner === "crew" ? "🎉 Crew wins!" : "🕵️ Imposter wins!";
+    rows = [
+      revealLine("Imposter", r.imposterName),
+      revealLine("Crew word", r.crewWord),
+      revealLine("Imposter's word", r.imposterWord),
+    ];
     if (r.guess != null) rows.push(revealLine("Imposter's guess", r.guess || "—"));
     rows.push(revealLine("Outcome", r.reason));
     const tally = (r.tally || []).map(t => t.name + " (" + t.count + ")").join(",  ");
@@ -723,6 +785,18 @@ $("rPlus").onclick  = () => { if (amHost()) sendMsg({ type: "settings", laps: Ma
 $("modePhone").onclick    = () => { if (amHost()) sendMsg({ type: "settings", inPerson: false }); };
 $("modeInPerson").onclick = () => { if (amHost()) sendMsg({ type: "settings", inPerson: true }); };
 $("revealImposterBtn").onclick = () => sendMsg({ type: "reveal" });
+$("pNoneRange").oninput = e => {
+  const pNone = parseInt(e.target.value, 10) / 100;
+  $("pNoneVal").textContent = Math.round(pNone * 100) + "%";
+  renderDistChart(pNone, parseInt($("lambdaRange").value, 10) / 100);
+  if (amHost()) sendMsg({ type: "settings", pNone });
+};
+$("lambdaRange").oninput = e => {
+  const lambda = parseInt(e.target.value, 10) / 100;
+  $("lambdaVal").textContent = lambda.toFixed(2);
+  renderDistChart(parseInt($("pNoneRange").value, 10) / 100, lambda);
+  if (amHost()) sendMsg({ type: "settings", lambda });
+};
 
 function submitClue() {
   const w = $("clueInput").value.trim();

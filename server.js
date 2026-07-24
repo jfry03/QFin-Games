@@ -32,7 +32,19 @@ const WORDS = {
     ["Touchpad","Mouse","Keyboard","Game controller","Remote control"],
     ["Sun hat","Sunglasses","Umbrella","Raincoat","Wellies"],
     ["Magnifying glass","Mirror","Window","Binoculars","Telescope"],
-    ["Kettle","Toaster","Microwave","Oven","Stove"]
+    ["Kettle","Toaster","Microwave","Oven","Stove"],
+    ["Pen","Pencil","Marker","Crayon","Chalk"],
+    ["Cup","Mug","Glass","Bottle","Flask"],
+    ["Fork","Spoon","Ladle","Chopsticks","Knife"],
+    ["Watch","Bracelet","Ring","Necklace","Earring"],
+    ["Towel","Flannel","Washcloth","Bathrobe","Loofah"],
+    ["Key","Latch","Bolt","Padlock","Deadbolt"],
+    ["Notebook","Diary","Journal","Ledger","Binder"],
+    ["Plate","Bowl","Saucer","Platter","Tray"],
+    ["Clock","Alarm clock","Stopwatch","Timer","Hourglass"],
+    ["Envelope","Letter","Postcard","Parcel","Stamp"],
+    ["Sofa","Armchair","Stool","Bench","Beanbag"],
+    ["Blender","Whisk","Grater","Peeler","Rolling pin"]
   ],
   "Food": [
     ["Pita","Naan","Flatbread","Calzone","Pizza"],
@@ -44,7 +56,19 @@ const WORDS = {
     ["Mango","Pineapple","Honeydew","Cantaloupe","Watermelon"],
     ["Nuts","Crackers","Crisps","Pretzel","Popcorn"],
     ["Wonton","Dumpling","Spring roll","Sashimi","Sushi"],
-    ["Tea","Espresso","Latte","Cappuccino","Coffee"]
+    ["Tea","Espresso","Latte","Cappuccino","Coffee"],
+    ["Apple","Pear","Peach","Plum","Apricot"],
+    ["Carrot","Parsnip","Turnip","Beetroot","Radish"],
+    ["Cheddar","Gouda","Mozzarella","Feta","Parmesan"],
+    ["Ketchup","Mustard","Mayonnaise","Relish","Barbecue sauce"],
+    ["Rice","Quinoa","Couscous","Barley","Oats"],
+    ["Fudge","Toffee","Caramel","Nougat","Marshmallow"],
+    ["Lemon","Lime","Orange","Grapefruit","Tangerine"],
+    ["Broccoli","Cauliflower","Cabbage","Kale","Spinach"],
+    ["Bacon","Ham","Sausage","Salami","Pepperoni"],
+    ["Almond","Walnut","Cashew","Pistachio","Hazelnut"],
+    ["Yogurt","Custard","Pudding","Mousse","Jelly"],
+    ["Chickpea","Lentil","Kidney bean","Black bean","Butter bean"]
   ],
   "Animals": [
     ["Lion","Tiger","Jaguar","Cheetah","Leopard"],
@@ -56,7 +80,19 @@ const WORDS = {
     ["Bison","Buffalo","Hippo","Rhino","Elephant"],
     ["Squirrel","Hare","Rabbit","Wallaby","Kangaroo"],
     ["Gecko","Iguana","Lizard","Alligator","Crocodile"],
-    ["Horse","Deer","Antelope","Zebra","Giraffe"]
+    ["Horse","Deer","Antelope","Zebra","Giraffe"],
+    ["Ant","Beetle","Ladybug","Grasshopper","Cricket"],
+    ["Bee","Wasp","Hornet","Fly","Mosquito"],
+    ["Cow","Goat","Sheep","Pig","Donkey"],
+    ["Duck","Goose","Swan","Chicken","Turkey"],
+    ["Mouse","Rat","Hamster","Gerbil","Guinea pig"],
+    ["Trout","Salmon","Cod","Tuna","Mackerel"],
+    ["Spider","Scorpion","Tick","Mite","Centipede"],
+    ["Wolf","Fox","Coyote","Jackal","Dingo"],
+    ["Bear","Panda","Sloth","Badger","Wolverine"],
+    ["Parrot","Cockatoo","Budgie","Canary","Finch"],
+    ["Snail","Slug","Worm","Leech","Caterpillar"],
+    ["Bat","Mole","Hedgehog","Shrew","Vole"]
   ],
   "Places": [
     ["Taxi rank","Subway","Bus terminal","Train station","Airport"],
@@ -68,19 +104,18 @@ const WORDS = {
     ["Cottage","Mansion","Fortress","Palace","Castle"],
     ["Cave","Canyon","Glacier","Mountain","Volcano"],
     ["Opera house","Stadium","Concert hall","Theatre","Cinema"],
-    ["Food truck","Diner","Restaurant","Cafe","Bakery"]
-  ],
-  "Movies": [
-    ["Jumanji","Godzilla","King Kong","Jurassic Park","Jaws"],
-    ["Brave","Encanto","Moana","Tangled","Frozen"],
-    ["Coco","Cars","Up","Finding Nemo","Toy Story"],
-    ["Dune","Interstellar","Guardians of the Galaxy","Star Trek","Star Wars"],
-    ["Looper","Tenet","Interstellar","Inception","The Matrix"],
-    ["Tarzan","Mulan","The Lion King","Aladdin","Shrek"],
-    ["300","Braveheart","Gladiator","Creed","Rocky"],
-    ["Goosebumps","Gremlins","Beetlejuice","Men in Black","Ghostbusters"],
-    ["Percy Jackson","Eragon","Narnia","Lord of the Rings","Harry Potter"],
-    ["Notting Hill","Pretty Woman","La La Land","The Notebook","Titanic"]
+    ["Food truck","Diner","Restaurant","Cafe","Bakery"],
+    ["Kitchen","Pantry","Dining room","Living room","Bedroom"],
+    ["Attic","Loft","Basement","Cellar","Garage"],
+    ["Meadow","Field","Prairie","Savanna","Desert"],
+    ["Island","Peninsula","Cape","Reef","Atoll"],
+    ["Hamlet","Village","Town","City","Metropolis"],
+    ["Bridge","Overpass","Underpass","Tunnel","Viaduct"],
+    ["Farm","Ranch","Orchard","Vineyard","Plantation"],
+    ["Harbor","Dock","Pier","Marina","Wharf"],
+    ["Chapel","Church","Cathedral","Temple","Mosque"],
+    ["Gym","Spa","Sauna","Steam room","Pool"],
+    ["Bank","Post office","Town hall","Courthouse","Embassy"]
   ],
   "Sports": [
     ["Dodgeball","Handball","Volleyball","Netball","Basketball"],
@@ -92,19 +127,46 @@ const WORDS = {
     ["Rowing","Cycling","Hurdles","Sprinting","Running"],
     ["Snooker","Darts","Bowling","Mini golf","Golf"],
     ["Discus","Javelin","Fencing","Shooting","Archery"],
-    ["Trampolining","Diving","Gymnastics","Bouldering","Climbing"]
+    ["Trampolining","Diving","Gymnastics","Bouldering","Climbing"],
+    ["Marathon","Triathlon","Decathlon","Pentathlon","Heptathlon"],
+    ["Sailing","Kayaking","Canoeing","Rafting","Paddleboarding"],
+    ["Curling","Ice hockey","Figure skating","Speed skating","Bobsled"],
+    ["Long jump","Triple jump","High jump","Pole vault","Shot put"],
+    ["Weightlifting","Powerlifting","Bodybuilding","CrossFit","Strongman"],
+    ["Motocross","Rally","Formula 1","Karting","Drag racing"],
+    ["Horse racing","Show jumping","Dressage","Polo","Rodeo"],
+    ["Water polo","Synchronised swimming","Freediving","Snorkelling","Surfing"],
+    ["Abseiling","Mountaineering","Caving","Hiking","Orienteering"],
+    ["Cheerleading","Acrobatics","Parkour","Breakdancing","Tumbling"]
   ]
 };
 
 const ALL_CLUSTERS = Object.values(WORDS).flat();
 
-// Exactly one imposter every round.
-const IMPOSTER_COUNT = 1;
-
 function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
 
+// How many players get an "off" (adjacent) word instead of the main crew word.
+// Drawn from a zero-modified Poisson: with probability `pNone` nobody is off;
+// otherwise the count follows a Poisson(lambda) truncated to >= 1. This is the
+// distribution the host sees and tunes in the lobby. Result is clamped to
+// [0, maxOff] so at least one player always holds the main word.
+function samplePoisson(lambda) {
+  const L = Math.exp(-lambda);
+  let k = 0, p = 1;
+  do { k++; p *= Math.random(); } while (p > L);
+  return k - 1;
+}
+function sampleOffCount(pNone, lambda, maxOff) {
+  if (maxOff <= 0) return 0;
+  if (Math.random() < pNone) return 0;
+  let k;
+  do { k = samplePoisson(lambda); } while (k < 1);   // truncate to >= 1
+  return Math.min(k, maxOff);
+}
+
 // Returns an array of length `playerCount`: each entry { imposter, word }.
-function buildRound(playerCount, similarity) {
+// `wantOff` is how many players should get an adjacent word (0..playerCount-1).
+function buildRound(playerCount, similarity, wantOff) {
   const cluster = pick(ALL_CLUSTERS);
   const ci = Math.floor(Math.random() * cluster.length);
   const crewWord = cluster[ci];
@@ -121,7 +183,7 @@ function buildRound(playerCount, similarity) {
     ? [candidates[pos], ...candidates.filter((_, i) => i !== pos)]
     : [crewWord];
 
-  const nImposters = Math.min(IMPOSTER_COUNT, playerCount - 1, imposterWords.length);
+  const nImposters = Math.max(0, Math.min(wantOff, playerCount - 1, imposterWords.length));
 
   const idx = [...Array(playerCount).keys()];
   for (let i = idx.length - 1; i > 0; i--) {
@@ -164,7 +226,9 @@ function createRoom() {
     code,
     players: new Map(),   // playerId -> { id, name, ws, connected, word }
     hostId: null,
-    settings: { similarity: 4, laps: 2, inPerson: false },
+    // dist: zero-modified Poisson for how many players get an off word
+    // (pNone = chance nobody is off; lambda = shape of the >=1 tail).
+    settings: { similarity: 4, laps: 2, inPerson: false, dist: { pNone: 0.07, lambda: 0.91 } },
     phase: "lobby",       // lobby | round | assigned | vote | guess | result
     order: [],            // playerIds in clue-giving turn order
     turnIndex: 0,         // whose turn it is within order
@@ -199,6 +263,7 @@ function lobbyState(room) {
     similarity: room.settings.similarity,
     laps: room.settings.laps,
     inPerson: room.settings.inPerson,
+    dist: { pNone: room.settings.dist.pNone, lambda: room.settings.dist.lambda },
     lap: room.lap,
     order: room.order,
     turnIndex: room.turnIndex,
@@ -320,6 +385,10 @@ function onSettings(ws, msg) {
   const l = parseInt(msg.laps, 10);
   if (l >= 1 && l <= 6) room.settings.laps = l;
   if (typeof msg.inPerson === "boolean") room.settings.inPerson = msg.inPerson;
+  if (typeof msg.pNone === "number" && msg.pNone >= 0 && msg.pNone <= 0.9)
+    room.settings.dist.pNone = msg.pNone;
+  if (typeof msg.lambda === "number" && msg.lambda >= 0.05 && msg.lambda <= 5)
+    room.settings.dist.lambda = msg.lambda;
   broadcastState(room);
 }
 
@@ -330,7 +399,13 @@ function onStart(ws) {
   if (players.length < 3) {
     return send(ws, { type: "error", code: "too_few", message: "Need at least 3 players." });
   }
-  const roles = buildRound(players.length, room.settings.similarity);
+  // How many players get an off word. In the on-phone vote game the catch/guess
+  // flow assumes exactly one imposter, so it's always 1 there. In "just assign
+  // words" mode the count is drawn from the host's distribution (0..many).
+  const wantOff = room.settings.inPerson
+    ? sampleOffCount(room.settings.dist.pNone, room.settings.dist.lambda, players.length - 1)
+    : 1;
+  const roles = buildRound(players.length, room.settings.similarity, wantOff);
   // "inPerson" mode just hands out the words; there is no on-phone clue/vote
   // flow, so the round sits in the "assigned" phase until the host reveals.
   room.phase = room.settings.inPerson ? "assigned" : "round";
@@ -339,7 +414,8 @@ function onStart(ws) {
   room.lap = 0;
   room.votes = {};
   room.result = null;
-  room.imposterId = null;
+  room.imposterIds = [];   // every player who got an off word this round
+  room.imposterId = null;  // the single imposter (on-phone vote game)
   room.crewWord = null;
   // fresh suspicion marks each game
   players.forEach(p => { p.marks = {}; });
@@ -352,10 +428,11 @@ function onStart(ws) {
   room.order = order;
   players.forEach((p, i) => {
     p.word = roles[i].word;
-    if (roles[i].imposter) room.imposterId = p.id;
+    if (roles[i].imposter) room.imposterIds.push(p.id);
     else room.crewWord = roles[i].word;   // every crew member shares this word
     send(p.ws, { type: "round", word: p.word });
   });
+  room.imposterId = room.imposterIds[0] || null;
   broadcastState(room);
 }
 
@@ -365,12 +442,14 @@ function onReveal(ws) {
   const room = roomFor(ws);
   if (!isHost(ws, room) || room.phase !== "assigned") return;
   const nameOf = id => room.players.get(id)?.name || "?";
+  // Everyone who got an off word, with the word they held.
+  const odd = (room.imposterIds || [])
+    .map(id => ({ name: nameOf(id), word: room.players.get(id)?.word || null }))
+    .filter(o => o.word != null);
   room.result = {
     mode: "reveal",
-    imposterId: room.imposterId,
-    imposterName: nameOf(room.imposterId),
     crewWord: room.crewWord,
-    imposterWord: room.players.get(room.imposterId)?.word || null,
+    odd,                         // [] means nobody was off this round
   };
   room.phase = "result";
   broadcastState(room);
