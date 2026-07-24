@@ -19,6 +19,20 @@ npm install
 npm start          # serves on http://localhost:3000  (override with PORT=…)
 ```
 
+## Deploy
+
+Deployment is a separate, manual step from pushing to GitHub:
+
+```bash
+git push           # 1. publish your changes to GitHub
+./update.sh        # 2. make the live server run the latest committed code
+```
+
+`update.sh` SSHes into the server, pulls `main` from GitHub, installs
+dependencies, and restarts the service. It's safe to re-run and bootstraps
+itself on first use. It never pushes — it only *pulls* what's already on GitHub,
+so always `git push` first.
+
 ## Files
 
 | File            | Purpose                                             |
