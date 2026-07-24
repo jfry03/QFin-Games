@@ -164,8 +164,8 @@ function createRoom() {
     code,
     players: new Map(),   // playerId -> { id, name, ws, connected, word }
     hostId: null,
-    settings: { similarity: 4, laps: 2 },
-    phase: "lobby",       // lobby | round | vote | guess | result
+    settings: { similarity: 4, laps: 2, inPerson: false },
+    phase: "lobby",       // lobby | round | assigned | vote | guess | result
     order: [],            // playerIds in clue-giving turn order
     turnIndex: 0,         // whose turn it is within order
     lap: 0,               // which clue lap (round) we're on, 0-based
@@ -198,6 +198,7 @@ function lobbyState(room) {
     hostId: room.hostId,
     similarity: room.settings.similarity,
     laps: room.settings.laps,
+    inPerson: room.settings.inPerson,
     lap: room.lap,
     order: room.order,
     turnIndex: room.turnIndex,
@@ -252,6 +253,7 @@ function handle(ws, msg) {
     case "rejoin": return onJoin(ws, { code: msg.code, playerId: msg.playerId, rejoinOnly: true });
     case "settings": return onSettings(ws, msg);
     case "start":  return onStart(ws);
+    case "reveal": return onReveal(ws);
     case "clue":   return onClue(ws, msg);
     case "skip":   return onSkip(ws);
     case "vote":   return onVote(ws, msg);
@@ -298,7 +300,7 @@ function onJoin(ws, { name, code, playerId, rejoinOnly }) {
     you: { id: player.id, name: player.name },
   });
   // If they reconnected mid-round, resend their secret word + private marks.
-  if (room.phase === "round" && player.word != null) {
+  if ((room.phase === "round" || room.phase === "assigned") && player.word != null) {
     send(ws, { type: "round", word: player.word });
   }
   if (room.phase === "guess" && player.id === room.imposterId) {
@@ -317,6 +319,7 @@ function onSettings(ws, msg) {
   if (s >= 1 && s <= 5) room.settings.similarity = s;
   const l = parseInt(msg.laps, 10);
   if (l >= 1 && l <= 6) room.settings.laps = l;
+  if (typeof msg.inPerson === "boolean") room.settings.inPerson = msg.inPerson;
   broadcastState(room);
 }
 
@@ -328,7 +331,9 @@ function onStart(ws) {
     return send(ws, { type: "error", code: "too_few", message: "Need at least 3 players." });
   }
   const roles = buildRound(players.length, room.settings.similarity);
-  room.phase = "round";
+  // "inPerson" mode just hands out the words; there is no on-phone clue/vote
+  // flow, so the round sits in the "assigned" phase until the host reveals.
+  room.phase = room.settings.inPerson ? "assigned" : "round";
   room.clues = [];
   room.turnIndex = 0;
   room.lap = 0;
@@ -351,6 +356,23 @@ function onStart(ws) {
     else room.crewWord = roles[i].word;   // every crew member shares this word
     send(p.ws, { type: "round", word: p.word });
   });
+  broadcastState(room);
+}
+
+// "Just assign words" mode: the host ends the round and everyone sees the
+// reveal (imposter + both words). There is no on-phone vote, so no winner.
+function onReveal(ws) {
+  const room = roomFor(ws);
+  if (!isHost(ws, room) || room.phase !== "assigned") return;
+  const nameOf = id => room.players.get(id)?.name || "?";
+  room.result = {
+    mode: "reveal",
+    imposterId: room.imposterId,
+    imposterName: nameOf(room.imposterId),
+    crewWord: room.crewWord,
+    imposterWord: room.players.get(room.imposterId)?.word || null,
+  };
+  room.phase = "result";
   broadcastState(room);
 }
 
@@ -551,7 +573,11 @@ const server = http.createServer((req, res) => {
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end("Forbidden"); }
   fs.readFile(filePath, (err, data) => {
     if (err) { res.writeHead(404); return res.end("Not found"); }
-    res.writeHead(200, { "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream" });
+    res.writeHead(200, {
+      "Content-Type": MIME[path.extname(filePath)] || "application/octet-stream",
+      // Always revalidate so a redeploy is picked up immediately (no stale page).
+      "Cache-Control": "no-cache",
+    });
     res.end(data);
   });
 });

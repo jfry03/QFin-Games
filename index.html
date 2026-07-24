@@ -95,6 +95,16 @@
   .btn.ghost { background: transparent; color: var(--muted); font-size: 0.95rem; }
   .push-bottom { margin-top: auto; }
 
+  /* Segmented two-way choice (e.g. play mode) */
+  .seg { display: flex; gap: 8px; }
+  .seg-btn {
+    flex: 1; padding: 13px 10px; border-radius: 12px; border: 1.5px solid var(--card);
+    background: var(--card); color: var(--muted); font-weight: 700; font-size: 0.9rem;
+    cursor: pointer; line-height: 1.15;
+  }
+  .seg-btn.on { border-color: var(--accent2); background: rgba(108, 92, 231, 0.35); color: var(--text); }
+  .seg-btn:disabled { cursor: default; opacity: 0.7; }
+
   /* Lobby */
   .code-badge {
     background: var(--card); border-radius: var(--radius); padding: 18px; text-align: center;
@@ -176,6 +186,7 @@
   .result-banner { text-align: center; padding: 22px; border-radius: var(--radius); margin-bottom: 16px; font-size: 1.35rem; font-weight: 800; }
   .result-banner.crew { background: rgba(29,209,161,0.15); color: var(--good); }
   .result-banner.imposter { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .result-banner.reveal-neutral { background: var(--card); color: var(--accent2); }
   .reveal-line { background: var(--card); border-radius: 12px; padding: 12px 15px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
   .reveal-line .k { color: var(--muted); }
   .reveal-line .v { font-weight: 700; text-align: right; }
@@ -233,6 +244,14 @@
       <div class="lbl">Room code</div>
       <div class="code" id="lobbyCode">····</div>
     </div>
+    <div class="field" id="modeField">
+      <label>How you'll play</label>
+      <div class="seg">
+        <button class="seg-btn on" id="modePhone">Clues &amp; votes<br>on phones</button>
+        <button class="seg-btn" id="modeInPerson">Just assign<br>words</button>
+      </div>
+      <div class="hint" id="modeHint">Full game on phones: clues, voting and the reveal all happen here.</div>
+    </div>
     <div class="field" id="simField">
       <label>Word similarity <span class="sim-label" id="simLabel">Close</span></label>
       <input type="range" class="range" id="simRange" min="1" max="5" step="1" value="4">
@@ -273,6 +292,10 @@
     <div class="round-list" id="roundList"></div>
     <div class="history-title" id="histTitle" style="display:none;">Earlier rounds</div>
     <div class="round-list" id="clueLog"></div>
+
+    <!-- Shown only in "just assign words" mode -->
+    <p class="hint hidden" id="assignedHint" style="text-align:center;">Everyone has their word. Give clues and vote out loud — the host reveals the imposter when you're done.</p>
+    <button class="btn hidden push-bottom" id="revealImposterBtn">Reveal imposter &amp; words</button>
   </section>
 
   <!-- VOTE -->
@@ -328,12 +351,14 @@
 const $ = id => document.getElementById(id);
 const SIM_LABELS = { 1: "Far off", 2: "Distant", 3: "Medium", 4: "Close", 5: "Very close" };
 
-// Persisted so a phone can rejoin the same room/player after a screen lock.
+// Persisted PER TAB (sessionStorage) so a phone can rejoin the same room after
+// a screen-lock or in-tab refresh — but a brand-new tab starts fresh on the
+// home screen instead of silently rejoining the old game.
 const KEY = "imposter_session";
 let session = {};
-try { session = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch {}
-function saveSession() { localStorage.setItem(KEY, JSON.stringify(session)); }
-function clearSession() { session = {}; localStorage.removeItem(KEY); }
+try { session = JSON.parse(sessionStorage.getItem(KEY) || "{}"); } catch {}
+function saveSession() { sessionStorage.setItem(KEY, JSON.stringify(session)); }
+function clearSession() { session = {}; sessionStorage.removeItem(KEY); }
 
 let state = null;   // latest server "state" message
 let ws = null;
@@ -415,9 +440,10 @@ function amHost() { return state && state.hostId === session.playerId; }
 
 function render() {
   if (!state) return;
-  if (state.phase === "lobby")   renderLobby();
-  if (state.phase === "round")   renderRound();
-  if (state.phase === "vote")    renderVote();
+  if (state.phase === "lobby")    renderLobby();
+  if (state.phase === "round")    renderRound();
+  if (state.phase === "assigned") renderAssigned();
+  if (state.phase === "vote")     renderVote();
   if (state.phase === "guess")   renderGuess();
   if (state.phase === "result")  renderResult();
   renderChat();
@@ -443,9 +469,21 @@ function renderLobby() {
     </div>`).join("");
 
   const host = amHost();
+  const inPerson = !!state.inPerson;
+
+  // Play-mode toggle
+  $("modePhone").classList.toggle("on", !inPerson);
+  $("modeInPerson").classList.toggle("on", inPerson);
+  $("modePhone").disabled = $("modeInPerson").disabled = !host;
+  $("modeHint").textContent = inPerson
+    ? "The phone just hands everyone their secret word — you give clues and vote out loud in the room."
+    : "Full game on phones: clues, voting and the reveal all happen here.";
+
   $("simRange").value = state.similarity;
   $("simLabel").textContent = SIM_LABELS[state.similarity];
   $("simRange").disabled = !host;
+  // Rounds/laps only matter for on-phone clue-giving.
+  $("roundsField").classList.toggle("hidden", inPerson);
   $("rDisp").textContent = state.laps;
   $("roundsVal").textContent = state.laps;
   $("rMinus").disabled = $("rPlus").disabled = !host;
@@ -454,7 +492,7 @@ function renderLobby() {
   if (host) {
     const enough = state.players.length >= 3;
     $("startBtn").disabled = !enough;
-    $("startBtn").textContent = enough ? "Start round" : "Need 3+ players";
+    $("startBtn").textContent = enough ? (inPerson ? "Assign words" : "Start round") : "Need 3+ players";
   }
 }
 
@@ -536,6 +574,11 @@ function markButtons(id) {
 
 function renderRound() {
   showScreen("round");
+  // Make sure the assign-only extras are hidden and the digital-play elements
+  // are visible (they share this screen with the "assigned" phase).
+  $("assignedHint").classList.add("hidden");
+  $("revealImposterBtn").classList.add("hidden");
+  $("turnBanner").classList.remove("hidden");
   const names = nameMap();
   const order = state.order || [], ti = state.turnIndex, clues = state.clues || [];
   $("lapTag").textContent = "Round " + ((state.lap || 0) + 1) + " of " + state.laps;
@@ -575,6 +618,23 @@ function renderRound() {
   // which would cover the player list and its like/dislike marks.
 }
 
+// "Just assign words" mode: everyone sees only their own secret word (via the
+// shared reveal card), then plays in person. The host ends it with a reveal.
+function renderAssigned() {
+  showScreen("round");
+  $("lapTag").textContent = "Words assigned — play in person";
+  // Hide every on-phone play element; the reveal card is driven by renderWord.
+  $("turnBanner").classList.add("hidden");
+  $("clueInputRow").classList.add("hidden");
+  $("skipBtn").classList.add("hidden");
+  $("roundList").innerHTML = "";
+  $("clueLog").innerHTML = "";
+  $("histTitle").style.display = "none";
+  const host = amHost();
+  $("revealImposterBtn").classList.toggle("hidden", !host);
+  $("assignedHint").classList.toggle("hidden", host);
+}
+
 function renderVote() {
   showScreen("vote");
   const voters = state.voters || [];
@@ -609,19 +669,26 @@ function renderResult() {
   showScreen("result");
   const r = state.result || {};
   const b = $("resultBanner");
-  b.className = "result-banner " + (r.winner === "crew" ? "crew" : "imposter");
-  b.textContent = r.winner === "crew" ? "🎉 Crew wins!" : "🕵️ Imposter wins!";
   const rows = [
     revealLine("Imposter", r.imposterName),
     revealLine("Crew word", r.crewWord),
     revealLine("Imposter's word", r.imposterWord),
   ];
-  if (r.guess != null) rows.push(revealLine("Imposter's guess", r.guess || "—"));
-  rows.push(revealLine("Outcome", r.reason));
-  const tally = (r.tally || []).map(t => t.name + " (" + t.count + ")").join(",  ");
-  if (tally) rows.push(revealLine("Votes", tally));
+  if (r.mode === "reveal") {
+    // In-person mode: no on-phone vote, so just reveal the truth — no winner.
+    b.className = "result-banner reveal-neutral";
+    b.textContent = "🎭 The reveal";
+  } else {
+    b.className = "result-banner " + (r.winner === "crew" ? "crew" : "imposter");
+    b.textContent = r.winner === "crew" ? "🎉 Crew wins!" : "🕵️ Imposter wins!";
+    if (r.guess != null) rows.push(revealLine("Imposter's guess", r.guess || "—"));
+    rows.push(revealLine("Outcome", r.reason));
+    const tally = (r.tally || []).map(t => t.name + " (" + t.count + ")").join(",  ");
+    if (tally) rows.push(revealLine("Votes", tally));
+  }
   $("resultDetail").innerHTML = rows.join("");
   $("playAgainBtn").classList.toggle("hidden", !amHost());
+  $("playAgainBtn").textContent = r.mode === "reveal" ? "Assign new words" : "Play again";
   $("toLobbyBtn").classList.toggle("hidden", !amHost());
   $("resultWait").classList.toggle("hidden", amHost());
 }
@@ -653,6 +720,9 @@ $("simRange").oninput = e => {
 $("startBtn").onclick = () => sendMsg({ type: "start" });
 $("rMinus").onclick = () => { if (amHost()) sendMsg({ type: "settings", laps: Math.max(1, (state.laps || 2) - 1) }); };
 $("rPlus").onclick  = () => { if (amHost()) sendMsg({ type: "settings", laps: Math.min(6, (state.laps || 2) + 1) }); };
+$("modePhone").onclick    = () => { if (amHost()) sendMsg({ type: "settings", inPerson: false }); };
+$("modeInPerson").onclick = () => { if (amHost()) sendMsg({ type: "settings", inPerson: true }); };
+$("revealImposterBtn").onclick = () => sendMsg({ type: "reveal" });
 
 function submitClue() {
   const w = $("clueInput").value.trim();
