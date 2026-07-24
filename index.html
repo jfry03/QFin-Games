@@ -35,7 +35,17 @@
     display: flex;
     flex-direction: column;
     min-height: 100vh;
+    position: relative;
   }
+  /* Always-available exit, shown on every in-room screen (top-right). */
+  .exit-btn {
+    position: absolute; top: 16px; right: 16px; z-index: 20;
+    padding: 8px 14px; border: 1.5px solid var(--card); border-radius: 999px;
+    background: rgba(35, 36, 71, 0.9); color: var(--muted);
+    font-size: 0.82rem; font-weight: 700; cursor: pointer; line-height: 1;
+    backdrop-filter: blur(4px); -webkit-backdrop-filter: blur(4px);
+  }
+  .exit-btn:active { transform: scale(0.96); }
   h1 { font-size: 1.7rem; margin: 8px 0 2px; letter-spacing: -0.5px; }
   h1 .em { color: var(--accent2); }
   .sub { color: var(--muted); margin: 0 0 22px; font-size: 0.95rem; }
@@ -195,6 +205,9 @@
 
   <div id="banner" class="banner hidden"></div>
 
+  <!-- Leave/exit — hidden on home, shown on every in-room screen -->
+  <button id="leaveBtn" class="exit-btn hidden" aria-label="Leave game">Leave&nbsp;✕</button>
+
   <!-- HOME -->
   <section id="home" class="screen">
     <h1>The <span class="em">Imposter</span></h1>
@@ -239,7 +252,6 @@
     <div class="players" id="playerList"></div>
     <button class="btn push-bottom" id="startBtn">Start round</button>
     <p class="hint" id="waitHint" style="text-align:center;">Waiting for the host to start…</p>
-    <button class="btn ghost" id="leaveBtn">Leave room</button>
   </section>
 
   <!-- ROUND: your word + turn order + clue history -->
@@ -396,6 +408,7 @@ let amCaught = false;  // am I the caught imposter who must guess?
 function showScreen(id) {
   ["home", "lobby", "round", "vote", "guess", "result"].forEach(s => $(s).classList.toggle("hidden", s !== id));
   $("chatPanel").classList.toggle("hidden", id === "home");
+  $("leaveBtn").classList.toggle("hidden", id === "home");
 }
 
 function amHost() { return state && state.hostId === session.playerId; }
@@ -695,9 +708,15 @@ $("chatSend").onclick = sendChat;
 $("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
 
 $("leaveBtn").onclick = () => {
+  // Confirm before bailing out of an active game (not the lobby), so a stray
+  // tap doesn't yank someone out mid-round.
+  const inGame = state && state.phase && state.phase !== "lobby";
+  if (inGame && !confirm("Leave the game? You'll go back to the home screen.")) return;
   sendMsg({ type: "leave" });
   clearSession();
   state = null;
+  myWord = null; wordShown = false; clearInterval(cdTimer);
+  myVote = null; amCaught = false;
   showScreen("home");
 };
 
