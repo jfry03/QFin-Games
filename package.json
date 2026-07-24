@@ -1,0 +1,13 @@
+{
+  "name": "imposter",
+  "version": "1.0.0",
+  "description": "Online multiplayer Imposter word game — join a room from any device.",
+  "main": "server.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

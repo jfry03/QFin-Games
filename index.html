@@ -1,0 +1,710 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Imposter — Online</title>
+<style>
+  :root {
+    --bg: #0f1020;
+    --bg2: #1a1b35;
+    --card: #232447;
+    --accent: #6c5ce7;
+    --accent2: #a29bfe;
+    --danger: #ff6b6b;
+    --good: #1dd1a1;
+    --text: #f5f6fa;
+    --muted: #9b9cc4;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text);
+    min-height: 100%;
+    display: flex;
+    align-items: stretch;
+    justify-content: center;
+  }
+  #app {
+    width: 100%;
+    max-width: 480px;
+    padding: 22px;
+    display: flex;
+    flex-direction: column;
+    min-height: 100vh;
+  }
+  h1 { font-size: 1.7rem; margin: 8px 0 2px; letter-spacing: -0.5px; }
+  h1 .em { color: var(--accent2); }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 0.95rem; }
+  .screen { flex: 1; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-weight: 600; margin-bottom: 10px; }
+  .field .hint { color: var(--muted); font-size: 0.82rem; font-weight: 400; margin-top: 6px; }
+
+  input.text {
+    width: 100%; padding: 16px; border-radius: var(--radius); border: 1.5px solid var(--card);
+    background: var(--card); color: var(--text); font-size: 1.1rem; outline: none;
+  }
+  input.text:focus { border-color: var(--accent2); }
+  input.code {
+    text-transform: uppercase; letter-spacing: 8px; text-align: center;
+    font-weight: 800; font-size: 1.6rem;
+  }
+
+  .sim-label {
+    float: right; font-weight: 700; color: var(--accent2);
+    background: var(--card); padding: 2px 12px; border-radius: 999px; font-size: 0.85rem;
+  }
+  .range {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 8px;
+    border-radius: 999px; background: var(--card); outline: none; margin: 6px 0;
+  }
+  .range::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none; width: 28px; height: 28px;
+    border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff;
+  }
+  .range::-moz-range-thumb {
+    width: 28px; height: 28px; border-radius: 50%; background: var(--accent);
+    cursor: pointer; border: 3px solid #fff;
+  }
+  .range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.78rem; }
+
+  .btn {
+    display: block; width: 100%; padding: 18px; border: none; border-radius: var(--radius);
+    background: var(--accent); color: #fff; font-size: 1.1rem; font-weight: 700;
+    cursor: pointer; margin-top: 14px;
+  }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; }
+  .btn.secondary { background: var(--card); color: var(--text); }
+  .btn.ghost { background: transparent; color: var(--muted); font-size: 0.95rem; }
+  .push-bottom { margin-top: auto; }
+
+  /* Lobby */
+  .code-badge {
+    background: var(--card); border-radius: var(--radius); padding: 18px; text-align: center;
+    margin-bottom: 18px;
+  }
+  .code-badge .lbl { color: var(--muted); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; }
+  .code-badge .code { font-size: 2.8rem; font-weight: 800; letter-spacing: 10px; margin-top: 4px; }
+  .players { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+  .prow {
+    display: flex; align-items: center; justify-content: space-between;
+    background: var(--card); padding: 14px 16px; border-radius: 14px;
+  }
+  .prow .tag { color: var(--accent2); font-size: 0.75rem; font-weight: 700; }
+  .prow.me { border: 1.5px solid var(--accent2); }
+
+  /* Reveal */
+  .pass {
+    flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center;
+    text-align: center; gap: 18px;
+  }
+  .pass .who { font-size: 1.2rem; color: var(--muted); }
+  .reveal-card {
+    width: 100%; background: var(--card); border-radius: 26px; padding: 40px 24px;
+    display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 230px;
+    justify-content: center; cursor: pointer; user-select: none; border: 2px solid transparent;
+  }
+  .reveal-card .tap-hint { color: var(--muted); font-size: 1rem; }
+  .reveal-card .role { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .reveal-card .word { font-size: 2.6rem; font-weight: 800; letter-spacing: -1px; color: var(--good); }
+  .lock-emoji { font-size: 3rem; }
+
+  .start-discuss { text-align: center; flex: 1; display: flex; flex-direction: column;
+    align-items: center; justify-content: center; gap: 16px; }
+  .start-discuss .big { font-size: 3rem; }
+  .start-discuss p { color: var(--muted); max-width: 320px; }
+
+  .countdown { color: var(--muted); font-size: 0.85rem; }
+  .turn-banner { text-align: center; font-weight: 700; font-size: 1.1rem; margin: 18px 0 12px; min-height: 1.3em; }
+  .turn-banner.mine { color: var(--good); }
+  .round-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 14px; }
+  .round-row {
+    display: flex; justify-content: space-between; align-items: center;
+    background: var(--card); padding: 12px 15px; border-radius: 12px;
+  }
+  .round-row.now { border: 1.5px solid var(--accent2); }
+  .round-row .rname { font-weight: 600; }
+  .round-row .rclue { color: var(--accent2); font-weight: 700; }
+  .round-row .rclue.skip { color: var(--muted); font-weight: 400; font-style: italic; }
+  .round-row .rwait { color: var(--muted); font-size: 0.85rem; }
+  .clue-input { margin-bottom: 14px; }
+  .history-title { color: var(--muted); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; margin: 4px 0 10px; }
+  .lap-tag { text-align: center; color: var(--accent2); font-weight: 700; font-size: 0.9rem; margin-bottom: 6px; }
+
+  /* suspicion marks */
+  .marks { display: flex; gap: 6px; }
+  .mark-btn {
+    min-width: 46px; height: 34px; border-radius: 9px; border: 1.5px solid #3a3b63;
+    background: transparent; color: var(--text); font-size: 0.9rem; font-weight: 700;
+    cursor: pointer; line-height: 1; padding: 0 9px;
+    filter: grayscale(1) opacity(0.6);
+  }
+  .mark-btn.on { filter: none; }
+  .mark-btn.like.on { background: rgba(29,209,161,0.22); border-color: var(--good); }
+  .mark-btn.dislike.on { background: rgba(255,107,107,0.2); border-color: var(--danger); }
+  .rside { display: flex; align-items: center; gap: 10px; }
+
+  /* vote */
+  .vote-list { display: flex; flex-direction: column; gap: 10px; margin-bottom: 14px; }
+  .vote-btn {
+    display: flex; justify-content: space-between; align-items: center; width: 100%;
+    padding: 16px; border-radius: 14px; border: 1.5px solid var(--card);
+    background: var(--card); color: var(--text); font-size: 1.05rem; font-weight: 600; cursor: pointer;
+  }
+  .vote-btn.chosen { border-color: var(--accent2); background: rgba(108,92,231,0.35); }
+  .vote-btn .vtick { color: var(--accent2); font-weight: 800; }
+  .vote-progress { text-align: center; color: var(--muted); margin-bottom: 12px; }
+
+  /* result */
+  .result-banner { text-align: center; padding: 22px; border-radius: var(--radius); margin-bottom: 16px; font-size: 1.35rem; font-weight: 800; }
+  .result-banner.crew { background: rgba(29,209,161,0.15); color: var(--good); }
+  .result-banner.imposter { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .reveal-line { background: var(--card); border-radius: 12px; padding: 12px 15px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
+  .reveal-line .k { color: var(--muted); }
+  .reveal-line .v { font-weight: 700; text-align: right; }
+
+  /* chat */
+  .chat { border-top: 1px solid var(--card); margin-top: 16px; padding-top: 12px; }
+  .chat-log { display: flex; flex-direction: column; gap: 6px; max-height: 170px; overflow-y: auto; margin-bottom: 8px; font-size: 0.9rem; }
+  .chat-msg .cn { color: var(--accent2); font-weight: 700; margin-right: 6px; }
+  .chat-row { display: flex; gap: 8px; }
+  .chat-row input {
+    flex: 1; padding: 12px; border-radius: 12px; border: 1.5px solid var(--card);
+    background: var(--card); color: var(--text); outline: none; font-size: 0.95rem;
+  }
+  .chat-row button { flex: none; padding: 0 18px; border: none; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+
+  .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 18px; }
+  .footer-note a { color: var(--accent2); }
+  .banner {
+    background: var(--danger); color: #fff; padding: 10px 14px; border-radius: 12px;
+    font-size: 0.9rem; margin-bottom: 14px; text-align: center;
+  }
+  .status-dot { font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: 10px; }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <div id="banner" class="banner hidden"></div>
+
+  <!-- HOME -->
+  <section id="home" class="screen">
+    <h1>The <span class="em">Imposter</span></h1>
+    <p class="sub">Online. Everyone joins from their own phone.</p>
+
+    <div class="field">
+      <label>Your name</label>
+      <input class="text" id="nameInput" maxlength="20" placeholder="e.g. Alex" autocomplete="off">
+    </div>
+
+    <button class="btn" id="createBtn">Create a room</button>
+
+    <div class="field" style="margin-top:28px;">
+      <label>Join a room</label>
+      <input class="text code" id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off">
+    </div>
+    <button class="btn secondary" id="joinBtn">Join</button>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="screen hidden">
+    <div class="code-badge">
+      <div class="lbl">Room code</div>
+      <div class="code" id="lobbyCode">····</div>
+    </div>
+    <div class="field" id="simField">
+      <label>Word similarity <span class="sim-label" id="simLabel">Close</span></label>
+      <input type="range" class="range" id="simRange" min="1" max="5" step="1" value="4">
+      <div class="range-ends"><span>Far off</span><span>Almost identical</span></div>
+      <div class="hint">How close the imposter's word is to the real one. Host controls this.</div>
+    </div>
+    <div class="field" id="roundsField">
+      <label>Rounds <span class="sim-label" id="roundsVal">2</span></label>
+      <div class="stepper">
+        <button id="rMinus">−</button>
+        <div class="val" id="rDisp">2</div>
+        <button id="rPlus">+</button>
+      </div>
+      <div class="hint">How many times clue-giving goes around the circle before the vote.</div>
+    </div>
+    <label style="font-weight:600;margin-bottom:10px;display:block;">Players (<span id="pCount">0</span>)</label>
+    <div class="players" id="playerList"></div>
+    <button class="btn push-bottom" id="startBtn">Start round</button>
+    <p class="hint" id="waitHint" style="text-align:center;">Waiting for the host to start…</p>
+    <button class="btn ghost" id="leaveBtn">Leave room</button>
+  </section>
+
+  <!-- ROUND: your word + turn order + clue history -->
+  <section id="round" class="screen hidden">
+    <div class="lap-tag" id="lapTag"></div>
+    <div class="reveal-card" id="revealCard">
+      <div class="lock-emoji">🔒</div>
+      <div class="tap-hint">Tap to view your word</div>
+    </div>
+
+    <div class="turn-banner" id="turnBanner"></div>
+
+    <div class="clue-input hidden" id="clueInputRow">
+      <input class="text" id="clueInput" maxlength="40" placeholder="Your one-word clue" autocomplete="off">
+      <button class="btn" id="clueBtn" style="margin-top:10px;">Say it →</button>
+    </div>
+    <button class="btn ghost hidden" id="skipBtn">Skip this player</button>
+
+    <div class="round-list" id="roundList"></div>
+    <div class="history-title" id="histTitle" style="display:none;">Earlier rounds</div>
+    <div class="round-list" id="clueLog"></div>
+  </section>
+
+  <!-- VOTE -->
+  <section id="vote" class="screen hidden">
+    <h1>Who's the <span class="em">imposter</span>?</h1>
+    <p class="sub">Tap who you suspect. A majority is needed to catch them.</p>
+    <div class="vote-progress" id="voteProgress"></div>
+    <div class="vote-list" id="voteList"></div>
+    <button class="btn ghost hidden" id="tallyBtn">Reveal votes now</button>
+    <div class="history-title">Clues this game</div>
+    <div class="round-list" id="voteClues"></div>
+  </section>
+
+  <!-- GUESS -->
+  <section id="guess" class="screen hidden">
+    <div id="guessImposter" class="hidden">
+      <h1>You're the <span class="em">imposter</span>.</h1>
+      <p class="sub">Caught! Guess the crew's word to steal the win. Exact match — or a word inside/around theirs — takes it.</p>
+      <input class="text" id="guessInput" maxlength="60" placeholder="The crew's word…" autocomplete="off">
+      <button class="btn" id="guessBtn" style="margin-top:12px;">Lock in guess</button>
+    </div>
+    <div id="guessWaiting" class="start-discuss">
+      <div class="big">🎭</div>
+      <h1 style="text-align:center;"><span id="caughtName"></span> was the imposter — caught!</h1>
+      <p>They're guessing the crew's word to try to steal the win…</p>
+    </div>
+    <button class="btn ghost hidden push-bottom" id="forfeitBtn">They're gone — crew wins</button>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="screen hidden">
+    <div class="result-banner" id="resultBanner"></div>
+    <div id="resultDetail"></div>
+    <button class="btn push-bottom" id="playAgainBtn">Play again</button>
+    <button class="btn secondary hidden" id="toLobbyBtn">Back to lobby &amp; settings</button>
+    <p class="hint" id="resultWait" style="text-align:center;">Waiting for the host…</p>
+  </section>
+
+  <!-- CHAT (shown whenever you're in a room) -->
+  <div class="chat hidden" id="chatPanel">
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-row">
+      <input id="chatInput" maxlength="240" placeholder="Message the room…" autocomplete="off">
+      <button id="chatSend">Send</button>
+    </div>
+  </div>
+
+  <div class="footer-note"><a href="teams.html">Team mode →</a></div>
+  <div class="status-dot" id="statusDot"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const SIM_LABELS = { 1: "Far off", 2: "Distant", 3: "Medium", 4: "Close", 5: "Very close" };
+
+// Persisted so a phone can rejoin the same room/player after a screen lock.
+const KEY = "imposter_session";
+let session = {};
+try { session = JSON.parse(localStorage.getItem(KEY) || "{}"); } catch {}
+function saveSession() { localStorage.setItem(KEY, JSON.stringify(session)); }
+function clearSession() { session = {}; localStorage.removeItem(KEY); }
+
+let state = null;   // latest server "state" message
+let ws = null;
+let reconnectTimer = null;
+
+function wsUrl() {
+  const proto = location.protocol === "https:" ? "wss" : "ws";
+  return `${proto}://${location.host}/ws`;
+}
+
+function connect() {
+  ws = new WebSocket(wsUrl());
+  ws.onopen = () => {
+    $("statusDot").textContent = "";
+    // If we have a live session, silently rejoin it.
+    if (session.code && session.playerId) {
+      sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name });
+    }
+  };
+  ws.onmessage = e => onMessage(JSON.parse(e.data));
+  ws.onclose = () => {
+    $("statusDot").textContent = "Reconnecting…";
+    clearTimeout(reconnectTimer);
+    reconnectTimer = setTimeout(connect, 1500);
+  };
+  ws.onerror = () => ws.close();
+}
+
+function sendMsg(msg) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(msg));
+}
+
+function banner(text) {
+  const b = $("banner");
+  if (!text) { b.classList.add("hidden"); return; }
+  b.textContent = text;
+  b.classList.remove("hidden");
+  setTimeout(() => b.classList.add("hidden"), 4000);
+}
+
+// ---- incoming ----
+function onMessage(msg) {
+  switch (msg.type) {
+    case "joined":
+      session.code = msg.code;
+      session.playerId = msg.playerId;
+      session.name = msg.you.name;
+      saveSession();
+      break;
+    case "state":
+      state = msg;
+      render();
+      break;
+    case "round":
+      startWordReveal(msg.word);
+      break;
+    case "guessPrompt":
+      amCaught = true;
+      if (state && state.phase === "guess") renderGuess();
+      break;
+    case "error":
+      banner(msg.message);
+      if (msg.code === "no_room" || msg.code === "gone") { clearSession(); showScreen("home"); }
+      break;
+  }
+}
+
+// ---- screens ----
+let myVote = null;     // who I voted for this game
+let amCaught = false;  // am I the caught imposter who must guess?
+
+function showScreen(id) {
+  ["home", "lobby", "round", "vote", "guess", "result"].forEach(s => $(s).classList.toggle("hidden", s !== id));
+  $("chatPanel").classList.toggle("hidden", id === "home");
+}
+
+function amHost() { return state && state.hostId === session.playerId; }
+
+function render() {
+  if (!state) return;
+  if (state.phase === "lobby")   renderLobby();
+  if (state.phase === "round")   renderRound();
+  if (state.phase === "vote")    renderVote();
+  if (state.phase === "guess")   renderGuess();
+  if (state.phase === "result")  renderResult();
+  renderChat();
+}
+
+function renderChat() {
+  const log = $("chatLog");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.innerHTML = (state.chat || []).map(m =>
+    '<div class="chat-msg"><span class="cn">' + escapeHtml(m.name) + '</span>' + escapeHtml(m.text) + '</div>'
+  ).join("");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+function renderLobby() {
+  showScreen("lobby");
+  $("lobbyCode").textContent = state.code;
+  $("pCount").textContent = state.players.length;
+  $("playerList").innerHTML = state.players.map(p => `
+    <div class="prow ${p.id === session.playerId ? "me" : ""}">
+      <span>${escapeHtml(p.name)}${p.id === session.playerId ? " (you)" : ""}</span>
+      ${p.isHost ? '<span class="tag">HOST</span>' : ""}
+    </div>`).join("");
+
+  const host = amHost();
+  $("simRange").value = state.similarity;
+  $("simLabel").textContent = SIM_LABELS[state.similarity];
+  $("simRange").disabled = !host;
+  $("rDisp").textContent = state.laps;
+  $("roundsVal").textContent = state.laps;
+  $("rMinus").disabled = $("rPlus").disabled = !host;
+  $("startBtn").classList.toggle("hidden", !host);
+  $("waitHint").classList.toggle("hidden", host);
+  if (host) {
+    const enough = state.players.length >= 3;
+    $("startBtn").disabled = !enough;
+    $("startBtn").textContent = enough ? "Start round" : "Need 3+ players";
+  }
+}
+
+// ---- your word: auto-reveal for 5s, then hide; tap to re-access anytime ----
+let myWord = null, wordShown = false, cdTimer = null;
+
+function renderWord(secondsLeft) {
+  const card = $("revealCard");
+  if (wordShown && myWord != null) {
+    card.className = "reveal-card crew";
+    card.innerHTML = '<div class="role">Your word</div><div class="word">' + escapeHtml(myWord) + '</div>' +
+      (secondsLeft != null
+        ? '<div class="countdown">Hides in ' + secondsLeft + 's · tap to hide</div>'
+        : '<div class="tap-hint">Tap to hide</div>');
+  } else {
+    card.className = "reveal-card";
+    card.innerHTML = myWord != null
+      ? '<div class="lock-emoji">🔒</div><div class="tap-hint">Tap to view your word</div>'
+      : '<div class="tap-hint">You joined mid-round — you\'re in the next round.</div>';
+  }
+}
+
+function startWordReveal(word) {
+  myWord = word;
+  myVote = null;
+  amCaught = false;
+  wordShown = true;
+  clearInterval(cdTimer);
+  let left = 5;
+  renderWord(left);
+  cdTimer = setInterval(() => {
+    left--;
+    if (left <= 0) { clearInterval(cdTimer); wordShown = false; renderWord(); }
+    else if (wordShown) renderWord(left);
+  }, 1000);
+}
+
+$("revealCard").onclick = () => {
+  if (myWord == null) return;
+  clearInterval(cdTimer);          // any manual tap cancels the auto-hide countdown
+  wordShown = !wordShown;
+  renderWord();
+};
+
+function nameMap() {
+  return Object.fromEntries(state.players.map(p => [p.id, p.name]));
+}
+
+function cluesHtml(clues) {
+  return clues.map(c =>
+    '<div class="round-row"><span class="rname">' + escapeHtml(c.name) + '</span>' +
+    '<span class="rclue ' + (c.skipped ? "skip" : "") + '">' + escapeHtml(c.word) + '</span></div>'
+  ).join("");
+}
+
+function markCounts(targetId) {
+  const mm = state.marks || {};
+  let like = 0, dislike = 0;
+  for (const voter in mm) {
+    const v = mm[voter][targetId];
+    if (v === "like") like++;
+    else if (v === "dislike") dislike++;
+  }
+  return { like, dislike };
+}
+function myMarkOn(id) {
+  return (state.marks && state.marks[session.playerId] && state.marks[session.playerId][id]) || null;
+}
+
+function markButtons(id) {
+  if (id === session.playerId) return "";
+  const { like, dislike } = markCounts(id);
+  const mine = myMarkOn(id);
+  return '<div class="marks">' +
+    '<button class="mark-btn like ' + (mine === "like" ? "on" : "") + '" data-mark="like" data-id="' + id + '">👍 ' + like + '</button>' +
+    '<button class="mark-btn dislike ' + (mine === "dislike" ? "on" : "") + '" data-mark="dislike" data-id="' + id + '">👎 ' + dislike + '</button>' +
+    '</div>';
+}
+
+function renderRound() {
+  showScreen("round");
+  const names = nameMap();
+  const order = state.order || [], ti = state.turnIndex, clues = state.clues || [];
+  $("lapTag").textContent = "Round " + ((state.lap || 0) + 1) + " of " + state.laps;
+
+  // clues accumulate across laps; the current lap's clues are the last block
+  const lapBase = (state.lap || 0) * order.length;
+
+  $("roundList").innerHTML = order.map((id, i) => {
+    let status;
+    if (i < ti) {
+      const c = clues[lapBase + i] || {};
+      status = '<span class="rclue ' + (c.skipped ? "skip" : "") + '">' + escapeHtml(c.word || "") + '</span>';
+    } else if (i === ti) {
+      status = '<span class="rwait">▶ now</span>';
+    } else {
+      status = '<span class="rwait">…</span>';
+    }
+    const me = id === session.playerId ? ' (you)' : '';
+    return '<div class="round-row ' + (i === ti ? "now" : "") + '">' +
+      '<span class="rname">' + escapeHtml(names[id] || "—") + me + '</span>' +
+      '<div class="rside">' + status + markButtons(id) + '</div></div>';
+  }).join("");
+
+  // clues from laps before this one, so the history persists across rounds
+  const earlier = clues.slice(0, lapBase);
+  $("clueLog").innerHTML = cluesHtml(earlier);
+  $("histTitle").style.display = earlier.length ? "" : "none";
+
+  const myTurn = order[ti] === session.playerId;
+  $("clueInputRow").classList.toggle("hidden", !myTurn);
+  $("skipBtn").classList.toggle("hidden", !(amHost() && !myTurn && order[ti]));
+  const banner = $("turnBanner");
+  banner.classList.toggle("mine", myTurn);
+  banner.textContent = myTurn ? "Your turn — say your clue"
+    : (order[ti] ? (names[order[ti]] || "Someone") + " is giving their clue…" : "");
+  // Note: no auto-focus of the clue input — focusing pops the mobile keyboard,
+  // which would cover the player list and its like/dislike marks.
+}
+
+function renderVote() {
+  showScreen("vote");
+  const voters = state.voters || [];
+  $("voteProgress").textContent = voters.length + " / " + (state.needed || state.players.length) + " voted";
+  $("voteList").innerHTML = state.players.map(p => {
+    if (p.id === session.playerId) return "";        // you can't vote for yourself
+    const chosen = myVote === p.id;
+    return '<button class="vote-btn ' + (chosen ? "chosen" : "") + '" data-vote="' + p.id + '">' +
+      '<span>' + escapeHtml(p.name) + '</span>' +
+      (chosen ? '<span class="vtick">✓ your vote</span>' : '') + '</button>';
+  }).join("");
+  $("tallyBtn").classList.toggle("hidden", !amHost());
+  $("voteClues").innerHTML = cluesHtml(state.clues || []);
+}
+
+function renderGuess() {
+  showScreen("guess");
+  const caught = amCaught || state.caughtId === session.playerId;
+  $("guessImposter").classList.toggle("hidden", !caught);
+  $("guessWaiting").classList.toggle("hidden", caught);
+  $("caughtName").textContent = state.caughtName || "The imposter";
+  $("forfeitBtn").classList.toggle("hidden", !(amHost() && !caught));
+  if (caught) $("guessInput").focus();
+}
+
+function revealLine(k, v) {
+  return '<div class="reveal-line"><span class="k">' + escapeHtml(k) + '</span>' +
+    '<span class="v">' + escapeHtml(v == null ? "—" : String(v)) + '</span></div>';
+}
+
+function renderResult() {
+  showScreen("result");
+  const r = state.result || {};
+  const b = $("resultBanner");
+  b.className = "result-banner " + (r.winner === "crew" ? "crew" : "imposter");
+  b.textContent = r.winner === "crew" ? "🎉 Crew wins!" : "🕵️ Imposter wins!";
+  const rows = [
+    revealLine("Imposter", r.imposterName),
+    revealLine("Crew word", r.crewWord),
+    revealLine("Imposter's word", r.imposterWord),
+  ];
+  if (r.guess != null) rows.push(revealLine("Imposter's guess", r.guess || "—"));
+  rows.push(revealLine("Outcome", r.reason));
+  const tally = (r.tally || []).map(t => t.name + " (" + t.count + ")").join(",  ");
+  if (tally) rows.push(revealLine("Votes", tally));
+  $("resultDetail").innerHTML = rows.join("");
+  $("playAgainBtn").classList.toggle("hidden", !amHost());
+  $("toLobbyBtn").classList.toggle("hidden", !amHost());
+  $("resultWait").classList.toggle("hidden", amHost());
+}
+
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+
+// ---- outgoing (buttons) ----
+$("createBtn").onclick = () => {
+  const name = $("nameInput").value.trim();
+  if (!name) return banner("Enter your name first.");
+  session.name = name;
+  sendMsg({ type: "create", name });
+};
+$("joinBtn").onclick = () => {
+  const name = $("nameInput").value.trim();
+  const code = $("codeInput").value.trim().toUpperCase();
+  if (!name) return banner("Enter your name first.");
+  if (code.length !== 4) return banner("Enter the 4-letter code.");
+  session.name = name;
+  sendMsg({ type: "join", code, name });
+};
+$("simRange").oninput = e => {
+  $("simLabel").textContent = SIM_LABELS[e.target.value];
+  if (amHost()) sendMsg({ type: "settings", similarity: parseInt(e.target.value, 10) });
+};
+$("startBtn").onclick = () => sendMsg({ type: "start" });
+$("rMinus").onclick = () => { if (amHost()) sendMsg({ type: "settings", laps: Math.max(1, (state.laps || 2) - 1) }); };
+$("rPlus").onclick  = () => { if (amHost()) sendMsg({ type: "settings", laps: Math.min(6, (state.laps || 2) + 1) }); };
+
+function submitClue() {
+  const w = $("clueInput").value.trim();
+  if (!w) return;
+  sendMsg({ type: "clue", word: w });
+  $("clueInput").value = "";
+}
+$("clueBtn").onclick = submitClue;
+$("clueInput").addEventListener("keydown", e => { if (e.key === "Enter") submitClue(); });
+$("skipBtn").onclick = () => sendMsg({ type: "skip" });
+
+// suspicion marks (delegated on the round list)
+$("roundList").onclick = e => {
+  const btn = e.target.closest(".mark-btn");
+  if (!btn) return;
+  const id = btn.getAttribute("data-id"), val = btn.getAttribute("data-mark");
+  sendMsg({ type: "mark", target: id, value: myMarkOn(id) === val ? "none" : val });
+};
+
+// voting
+$("voteList").onclick = e => {
+  const btn = e.target.closest("[data-vote]");
+  if (!btn) return;
+  myVote = btn.getAttribute("data-vote");
+  sendMsg({ type: "vote", target: myVote });
+  renderVote();
+};
+$("tallyBtn").onclick = () => sendMsg({ type: "tally" });
+
+// imposter's guess
+function submitGuess() {
+  const w = $("guessInput").value.trim();
+  if (!w) return;
+  sendMsg({ type: "guess", word: w });
+  $("guessInput").value = "";
+}
+$("guessBtn").onclick = submitGuess;
+$("guessInput").addEventListener("keydown", e => { if (e.key === "Enter") submitGuess(); });
+$("forfeitBtn").onclick = () => sendMsg({ type: "forfeit" });
+
+// end of game
+$("playAgainBtn").onclick = () => sendMsg({ type: "start" });
+$("toLobbyBtn").onclick = () => sendMsg({ type: "lobby" });
+
+// chat
+function sendChat() {
+  const t = $("chatInput").value.trim();
+  if (!t) return;
+  sendMsg({ type: "chat", text: t });
+  $("chatInput").value = "";
+}
+$("chatSend").onclick = sendChat;
+$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
+
+$("leaveBtn").onclick = () => {
+  sendMsg({ type: "leave" });
+  clearSession();
+  state = null;
+  showScreen("home");
+};
+
+// Prefill remembered name.
+if (session.name) $("nameInput").value = session.name;
+showScreen("home");
+connect();
+</script>
+</body>
+</html>

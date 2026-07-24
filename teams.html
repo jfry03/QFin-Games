@@ -1,0 +1,327 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Imposter 2 — Teams</title>
+<style>
+  :root {
+    --bg: #0f1020;
+    --bg2: #1a1b35;
+    --card: #232447;
+    --accent: #6c5ce7;
+    --accent2: #a29bfe;
+    --teamA: #00b894;
+    --teamB: #e17055;
+    --text: #f5f6fa;
+    --muted: #9b9cc4;
+    --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text); min-height: 100%; display: flex; justify-content: center;
+  }
+  #app { width: 100%; max-width: 480px; padding: 22px; display: flex; flex-direction: column; min-height: 100vh; }
+  h1 { font-size: 1.7rem; margin: 8px 0 2px; letter-spacing: -0.5px; }
+  h1 .em { color: var(--accent2); }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 0.95rem; }
+  .screen { flex: 1; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-weight: 600; margin-bottom: 10px; }
+  .field .hint { color: var(--muted); font-size: 0.82rem; font-weight: 400; margin-top: 6px; }
+
+  .stepper { display: flex; align-items: center; gap: 14px; background: var(--card); border-radius: var(--radius); padding: 8px; }
+  .stepper button { width: 52px; height: 52px; border-radius: 14px; border: none; background: var(--accent); color: #fff; font-size: 1.6rem; font-weight: 700; cursor: pointer; flex: none; }
+  .stepper button:active { transform: scale(0.92); }
+  .stepper .val { flex: 1; text-align: center; font-size: 1.8rem; font-weight: 700; }
+
+  .sim-label { float: right; font-weight: 700; color: var(--accent2); background: var(--card); padding: 2px 12px; border-radius: 999px; font-size: 0.85rem; }
+  .range { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; background: var(--card); outline: none; margin: 6px 0; }
+  .range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff; }
+  .range::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff; }
+  .range-ends { display: flex; justify-content: space-between; color: var(--muted); font-size: 0.78rem; }
+
+  .btn { display: block; width: 100%; padding: 18px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; margin-top: auto; }
+  .btn:active { transform: scale(0.98); }
+  .btn.ghost { background: transparent; color: var(--muted); margin-top: 12px; font-size: 0.95rem; }
+
+  .pass { flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 18px; }
+  .pass .who { font-size: 1.4rem; color: var(--muted); }
+  .pass .player-num { font-size: 4rem; font-weight: 800; line-height: 1; margin: 0; }
+  .reveal-card { width: 100%; background: var(--card); border-radius: 26px; padding: 40px 24px; display: flex; flex-direction: column; align-items: center; gap: 14px; min-height: 230px; justify-content: center; cursor: pointer; user-select: none; }
+  .reveal-card .tap-hint { color: var(--muted); font-size: 1rem; }
+  .reveal-card .role { font-size: 0.85rem; letter-spacing: 2px; text-transform: uppercase; color: var(--muted); }
+  .reveal-card .word { font-size: 2.4rem; font-weight: 800; letter-spacing: -1px; color: var(--accent2); text-align: center; }
+  .lock-emoji { font-size: 3rem; }
+
+  .start-discuss { text-align: center; flex: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 16px; }
+  .start-discuss .big { font-size: 3rem; }
+  .start-discuss p { color: var(--muted); max-width: 340px; }
+
+  /* team reveal */
+  .teamlist { display: flex; flex-direction: column; gap: 10px; margin: 10px 0 4px; }
+  .team-row { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 14px; padding: 12px 14px; border-left: 6px solid var(--muted); }
+  .team-row.A { border-left-color: var(--teamA); }
+  .team-row.B { border-left-color: var(--teamB); }
+  .team-row .pnum { font-weight: 800; width: 30px; }
+  .team-row .tname { font-weight: 700; font-size: 0.8rem; padding: 2px 8px; border-radius: 999px; }
+  .team-row.A .tname { background: rgba(0,184,148,0.25); color: var(--teamA); }
+  .team-row.B .tname { background: rgba(225,112,85,0.25); color: var(--teamB); }
+  .team-row .pword { margin-left: auto; color: var(--text); font-weight: 600; }
+
+  .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 18px; }
+  .footer-note a { color: var(--accent2); }
+</style>
+</head>
+<body>
+<div id="app">
+
+  <!-- SETUP -->
+  <section id="setup" class="screen">
+    <h1>The <span class="em">Imposter</span> · Teams</h1>
+    <p class="sub">Two hidden teams, one phone. Find your kind.</p>
+
+    <div class="field">
+      <label>Players</label>
+      <div class="stepper">
+        <button id="pMinus">−</button>
+        <div class="val" id="pVal">6</div>
+        <button id="pPlus">+</button>
+      </div>
+      <div class="hint">Split as evenly as possible into Team A &amp; Team B.</div>
+    </div>
+
+    <div class="field">
+      <label>Within-team similarity <span class="sim-label" id="simLabel">Close</span></label>
+      <input type="range" class="range" id="simRange" min="1" max="5" step="1" value="4">
+      <div class="range-ends"><span>Loosely related</span><span>Nearly identical</span></div>
+      <div class="hint">How alike teammates' words are. The two teams always get different themes.</div>
+    </div>
+
+    <button class="btn" id="startBtn">Start round</button>
+  </section>
+
+  <!-- REVEAL -->
+  <section id="reveal" class="screen hidden">
+    <div class="pass">
+      <div class="who">Player</div>
+      <p class="player-num" id="playerNum">1</p>
+      <div class="reveal-card" id="revealCard">
+        <div class="lock-emoji">🔒</div>
+        <div class="tap-hint">Tap to reveal your word</div>
+      </div>
+      <button class="btn" id="nextBtn">Hide &amp; pass on →</button>
+    </div>
+  </section>
+
+  <!-- DISCUSS -->
+  <section id="discuss" class="screen hidden">
+    <div class="start-discuss">
+      <div class="big">🫂🕵️</div>
+      <h1>Everyone's in.</h1>
+      <p>Go round giving one-word clues. Your teammates' words share your theme — the other team's don't. Work out who's with you, then call it. Reveal the teams when you're ready.</p>
+    </div>
+    <button class="btn" id="revealTeamsBtn">Reveal teams</button>
+    <button class="btn ghost" id="againBtn">New round (same settings)</button>
+    <button class="btn ghost" id="settingsBtn">Change settings</button>
+  </section>
+
+  <!-- TEAM REVEAL -->
+  <section id="teamReveal" class="screen hidden">
+    <h1>The teams</h1>
+    <p class="sub">Who shared a theme with whom.</p>
+    <div class="teamlist" id="teamList"></div>
+    <button class="btn" id="again2Btn">New round (same settings)</button>
+    <button class="btn ghost" id="settings2Btn">Change settings</button>
+  </section>
+
+  <div class="footer-note">Nothing leaves this device · <a href="index.html">Classic mode →</a></div>
+</div>
+
+<script>
+const WORDS = {
+  "Everyday": [
+    ["Comb","Hairbrush","Toothbrush","Razor","Nail clippers"],
+    ["Cushion","Pillow","Blanket","Duvet","Sleeping bag"],
+    ["Candle","Lantern","Flashlight","Desk lamp","Ceiling light"],
+    ["Wallet","Handbag","Backpack","Suitcase","Briefcase"],
+    ["Sponge","Mop","Broom","Bucket","Dustpan"],
+    ["Paperclip","Stapler","Sticky tape","Glue stick","Scissors"],
+    ["Touchpad","Mouse","Keyboard","Game controller","Remote control"],
+    ["Sun hat","Sunglasses","Umbrella","Raincoat","Wellies"],
+    ["Magnifying glass","Mirror","Window","Binoculars","Telescope"],
+    ["Kettle","Toaster","Microwave","Oven","Stove"]
+  ],
+  "Food": [
+    ["Pita","Naan","Flatbread","Calzone","Pizza"],
+    ["Crepe","Pancake","Waffle","French toast","Bagel"],
+    ["Noodles","Spaghetti","Macaroni","Ravioli","Lasagna"],
+    ["Taco","Wrap","Sandwich","Hot dog","Cheeseburger"],
+    ["Slushie","Sorbet","Frozen yogurt","Gelato","Ice cream"],
+    ["Scone","Muffin","Cupcake","Croissant","Donut"],
+    ["Mango","Pineapple","Honeydew","Cantaloupe","Watermelon"],
+    ["Nuts","Crackers","Crisps","Pretzel","Popcorn"],
+    ["Wonton","Dumpling","Spring roll","Sashimi","Sushi"],
+    ["Tea","Espresso","Latte","Cappuccino","Coffee"]
+  ],
+  "Animals": [
+    ["Lion","Tiger","Jaguar","Cheetah","Leopard"],
+    ["Seal","Shark","Whale","Porpoise","Dolphin"],
+    ["Starfish","Jellyfish","Cuttlefish","Squid","Octopus"],
+    ["Lizard","Salamander","Newt","Toad","Frog"],
+    ["Vulture","Eagle","Falcon","Hawk","Owl"],
+    ["Albatross","Pelican","Seagull","Puffin","Penguin"],
+    ["Bison","Buffalo","Hippo","Rhino","Elephant"],
+    ["Squirrel","Hare","Rabbit","Wallaby","Kangaroo"],
+    ["Gecko","Iguana","Lizard","Alligator","Crocodile"],
+    ["Horse","Deer","Antelope","Zebra","Giraffe"]
+  ],
+  "Places": [
+    ["Taxi rank","Subway","Bus terminal","Train station","Airport"],
+    ["Waterfall","River","Lake","Swimming pool","Beach"],
+    ["Office","Classroom","Study hall","Bookshop","Library"],
+    ["Vet","Dentist","Pharmacy","Clinic","Hospital"],
+    ["Pub","Nightclub","Bar","Arcade","Casino"],
+    ["Botanical garden","Zoo","Aquarium","Art gallery","Museum"],
+    ["Cottage","Mansion","Fortress","Palace","Castle"],
+    ["Cave","Canyon","Glacier","Mountain","Volcano"],
+    ["Opera house","Stadium","Concert hall","Theatre","Cinema"],
+    ["Food truck","Diner","Restaurant","Cafe","Bakery"]
+  ],
+  "Movies": [
+    ["Jumanji","Godzilla","King Kong","Jurassic Park","Jaws"],
+    ["Brave","Encanto","Moana","Tangled","Frozen"],
+    ["Coco","Cars","Up","Finding Nemo","Toy Story"],
+    ["Dune","Interstellar","Guardians of the Galaxy","Star Trek","Star Wars"],
+    ["Looper","Tenet","Interstellar","Inception","The Matrix"],
+    ["Tarzan","Mulan","The Lion King","Aladdin","Shrek"],
+    ["300","Braveheart","Gladiator","Creed","Rocky"],
+    ["Goosebumps","Gremlins","Beetlejuice","Men in Black","Ghostbusters"],
+    ["Percy Jackson","Eragon","Narnia","Lord of the Rings","Harry Potter"],
+    ["Notting Hill","Pretty Woman","La La Land","The Notebook","Titanic"]
+  ],
+  "Sports": [
+    ["Dodgeball","Handball","Volleyball","Netball","Basketball"],
+    ["Racquetball","Table tennis","Squash","Badminton","Tennis"],
+    ["Skiing","Snowboarding","Skateboarding","Bodyboarding","Surfing"],
+    ["Wrestling","Judo","Karate","Kickboxing","Boxing"],
+    ["Polo","Lacrosse","Hockey","Rugby","Football"],
+    ["Tee-ball","Rounders","Cricket","Softball","Baseball"],
+    ["Rowing","Cycling","Hurdles","Sprinting","Running"],
+    ["Snooker","Darts","Bowling","Mini golf","Golf"],
+    ["Discus","Javelin","Fencing","Shooting","Archery"],
+    ["Trampolining","Diving","Gymnastics","Bouldering","Climbing"]
+  ]
+};
+const ALL_CLUSTERS = Object.values(WORDS).flat();
+
+const state = { players: 6, similarity: 4, roles: [], current: 0 };
+const $ = id => document.getElementById(id);
+const pick = arr => arr[Math.floor(Math.random() * arr.length)];
+const randInt = n => Math.floor(Math.random() * n);
+
+// ---- Setup ----
+function renderSetup() { $("pVal").textContent = state.players; }
+$("pMinus").onclick = () => { state.players = Math.max(4, state.players - 1); renderSetup(); };
+$("pPlus").onclick  = () => { state.players = Math.min(14, state.players + 1); renderSetup(); };
+const SIM_LABELS = { 1: "Loose", 2: "Distant", 3: "Medium", 4: "Close", 5: "Nearly same" };
+$("simRange").oninput = e => {
+  state.similarity = parseInt(e.target.value, 10);
+  $("simLabel").textContent = SIM_LABELS[state.similarity];
+};
+
+// ---- Round ----
+// give a team a set of similar words from one cluster: pick a base word, then
+// hand each member a word within a window whose size shrinks as similarity rises.
+function teamWords(cluster, count, similarity) {
+  const window = Math.round((5 - similarity) / 4 * (cluster.length - 1)); // 0..len-1
+  const base = randInt(cluster.length);
+  const out = [];
+  for (let i = 0; i < count; i++) {
+    const lo = Math.max(0, base - window);
+    const hi = Math.min(cluster.length - 1, base + window);
+    out.push(cluster[lo + randInt(hi - lo + 1)]);
+  }
+  return out;
+}
+
+function buildRound() {
+  // two distinct clusters / themes
+  const cA = pick(ALL_CLUSTERS);
+  let cB = pick(ALL_CLUSTERS);
+  while (cB === cA) cB = pick(ALL_CLUSTERS);
+
+  // split players evenly (Team A gets the extra on odd counts), randomly assigned
+  const idx = [...Array(state.players).keys()];
+  for (let i = idx.length - 1; i > 0; i--) { const j = randInt(i + 1); [idx[i], idx[j]] = [idx[j], idx[i]]; }
+  const nA = Math.ceil(state.players / 2);
+  const teamA = new Set(idx.slice(0, nA));
+
+  const wordsA = teamWords(cA, nA, state.similarity);
+  const wordsB = teamWords(cB, state.players - nA, state.similarity);
+
+  state.roles = new Array(state.players);
+  let ai = 0, bi = 0;
+  for (let p = 0; p < state.players; p++) {
+    if (teamA.has(p)) state.roles[p] = { team: "A", word: wordsA[ai++] };
+    else              state.roles[p] = { team: "B", word: wordsB[bi++] };
+  }
+  state.current = 0;
+}
+
+// ---- Screens ----
+function show(id) {
+  ["setup","reveal","discuss","teamReveal"].forEach(s => $(s).classList.toggle("hidden", s !== id));
+}
+
+let revealed = false;
+function renderReveal() {
+  const card = $("revealCard");
+  revealed = false;
+  $("playerNum").textContent = state.current + 1;
+  card.innerHTML = '<div class="lock-emoji">🔒</div><div class="tap-hint">Tap to reveal your word</div>';
+  $("nextBtn").textContent = state.current < state.players - 1 ? "Hide & pass on →" : "Done — start discussion";
+}
+$("revealCard").onclick = () => {
+  if (revealed) return;
+  revealed = true;
+  const r = state.roles[state.current];
+  $("revealCard").innerHTML =
+    '<div class="role">Your word</div><div class="word">' + r.word + '</div><div class="tap-hint">Find your team. Keep it secret!</div>';
+};
+$("nextBtn").onclick = () => {
+  if (!revealed) { $("revealCard").click(); return; }
+  if (state.current < state.players - 1) { state.current++; renderReveal(); }
+  else show("discuss");
+};
+
+function renderTeams() {
+  const list = $("teamList");
+  list.innerHTML = "";
+  state.roles.forEach((r, i) => {
+    const row = document.createElement("div");
+    row.className = "team-row " + r.team;
+    row.innerHTML =
+      '<span class="pnum">' + (i + 1) + '</span>' +
+      '<span class="tname">Team ' + r.team + '</span>' +
+      '<span class="pword">' + r.word + '</span>';
+    list.appendChild(row);
+  });
+}
+
+$("startBtn").onclick     = () => { buildRound(); show("reveal"); renderReveal(); };
+$("againBtn").onclick     = () => { buildRound(); show("reveal"); renderReveal(); };
+$("again2Btn").onclick    = () => { buildRound(); show("reveal"); renderReveal(); };
+$("settingsBtn").onclick  = () => show("setup");
+$("settings2Btn").onclick = () => show("setup");
+$("revealTeamsBtn").onclick = () => { renderTeams(); show("teamReveal"); };
+
+renderSetup();
+</script>
+</body>
+</html>
