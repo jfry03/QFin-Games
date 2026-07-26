@@ -139,6 +139,21 @@
   .switch input:checked + .slider { background: var(--good); }
   .switch input:checked + .slider:before { transform: translateX(20px); }
   .switch input:disabled + .slider { opacity: 0.5; }
+  /* all-roles reference */
+  .roles-ref { background: var(--card); border-radius: 12px; padding: 4px 14px; margin-bottom: 8px; }
+  .roles-ref summary { cursor: pointer; padding: 10px 0; font-weight: 700; list-style: none; }
+  .roles-ref summary::-webkit-details-marker { display: none; }
+  .roles-ref summary:after { content: "＋"; float: right; color: var(--muted); }
+  .roles-ref[open] summary:after { content: "－"; }
+  .ref-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 12px; }
+  .ref-row { font-size: 0.88rem; line-height: 1.4; }
+  .ref-row .rname { font-weight: 800; }
+  .ref-row .rteam { font-size: 0.68rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
+  .ref-row .rteam.good { color: var(--good); background: rgba(29,209,161,0.16); }
+  .ref-row .rteam.evil { color: var(--danger); background: rgba(255,107,107,0.16); }
+  .ref-row.good .rname { color: var(--good); }
+  .ref-row.evil .rname { color: var(--danger); }
+  .ref-row .rdesc { color: var(--muted); display: block; margin-top: 2px; }
 </style>
 </head>
 <body>
@@ -184,6 +199,14 @@
       <label>Optional roles</label>
       <div class="toggle-list" id="roleToggles"></div>
       <div class="hint">Merlin &amp; the Assassin are always in. Extra evil roles beyond the evil count are dropped.</div>
+    </div>
+
+    <div class="field">
+      <label>All roles</label>
+      <details class="roles-ref">
+        <summary>What every role does</summary>
+        <div class="ref-list" id="refList"></div>
+      </details>
     </div>
 
     <div class="field" id="previewField">
@@ -303,6 +326,24 @@ const OPT_ROLES = [
   { key: "mordred",  name: "Mordred",  desc: "Hidden from Merlin", team: "evil" },
   { key: "oberon",   name: "Oberon",   desc: "Evil, but works alone", team: "evil" },
 ];
+// Every role in the game, for the lobby reference list.
+const ALL_ROLES = [
+  { name: "Merlin", team: "good", always: true, desc: "Knows who the evil players are — but Mordred is hidden from him. Must guide good without being obvious, or the Assassin will kill him." },
+  { name: "Percival", team: "good", desc: "Sees Merlin — but Morgana looks identical. Works out which is real and shields the true Merlin." },
+  { name: "Loyal Servant of Arthur", team: "good", desc: "Knows nothing for certain. Deduces from how quests go and who nominates whom." },
+  { name: "Assassin", team: "evil", always: true, desc: "If good passes three quests, gets one shot to name Merlin. Guess right and evil steals the game." },
+  { name: "Morgana", team: "evil", desc: "Appears to Percival as Merlin, muddying who the real Merlin is." },
+  { name: "Mordred", team: "evil", desc: "Hidden from Merlin — Merlin does not know Mordred is evil." },
+  { name: "Oberon", team: "evil", desc: "Evil, but works alone: doesn't know the other minions, and they don't know him." },
+  { name: "Minion of Mordred", team: "evil", desc: "A generic evil player. Sabotages quests and stays hidden." },
+];
+function renderRolesRef() {
+  $("refList").innerHTML = ALL_ROLES.map(r =>
+    '<div class="ref-row ' + r.team + '"><span class="rname">' + r.name + '</span>' +
+    '<span class="rteam ' + r.team + '">' + (r.team === "evil" ? "Evil" : "Good") + '</span>' +
+    (r.always ? '<span class="rteam" style="color:var(--gold);background:rgba(246,196,83,0.16)">Always</span>' : '') +
+    '<span class="rdesc">' + r.desc + '</span></div>').join("");
+}
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
 const KEY = "qfin_session";
@@ -695,6 +736,7 @@ $("leaveBtn").onclick = doLeave;
 $("leaveLink").onclick = doLeave;
 
 if (session.name) $("nameInput").value = session.name;
+renderRolesRef();
 showScreen("home");
 connect();
 </script>
