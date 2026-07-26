@@ -123,6 +123,10 @@ module.exports = (api) => {
       cards: {},            // id -> bool (success)  SECRET counts only until reveal
       lastVote: null,       // reveal payload for the just-finished team vote
       lastQuest: null,      // reveal payload for the just-finished quest
+      voteHistory: [],      // every resolved nomination (public once revealed)
+      missionHistory: [],   // every completed quest
+      paused: false,        // host paused the current nomination/vote timer
+      pauseRemaining: 0,    // ms left on the timer when it was paused
       assassinId: null,
       result: null,
     };
@@ -219,6 +223,8 @@ module.exports = (api) => {
       questResults: g.questResults,
       rejectCount: g.rejectCount,
       score: { good, evil },
+      voteHistory: g.voteHistory,        // all past nominations (public once revealed)
+      missionHistory: g.missionHistory,  // all completed quests
       minPlayers: MIN_PLAYERS,
       maxPlayers: MAX_PLAYERS,
     };
@@ -246,9 +252,12 @@ module.exports = (api) => {
       st.teamSize = QUEST_TEAMS[n] ? QUEST_TEAMS[n][g.quest] : 0;
       st.team = g.team;
     }
-    if (room.phase === "proposal") st.deadline = timerDeadline(room, "phase");
+    if (room.phase === "proposal" || room.phase === "teamVote") {
+      st.paused = g.paused;
+      st.pauseRemaining = g.pauseRemaining;
+      st.deadline = g.paused ? null : timerDeadline(room, "phase");
+    }
     if (room.phase === "teamVote") {
-      st.deadline = timerDeadline(room, "phase");
       st.voted = Object.keys(g.votes);
       st.voteNeeded = electorate(room).length;
     }
@@ -287,6 +296,7 @@ module.exports = (api) => {
       case "avCard":         return onCard(ws, msg, room);
       case "avAssassinate":  return onAssassinate(ws, msg, room);
       case "avForce":        return onForce(ws, room);
+      case "avPause":        return onPause(ws, room);
       case "lobby":          return onLobby(ws, room);
     }
   }
@@ -325,6 +335,10 @@ module.exports = (api) => {
     g.cards = {};
     g.lastVote = null;
     g.lastQuest = null;
+    g.voteHistory = [];
+    g.missionHistory = [];
+    g.paused = false;
+    g.pauseRemaining = 0;
     g.assassinId = null;
     g.result = null;
     deal(room);
@@ -347,6 +361,7 @@ module.exports = (api) => {
     g.team = [];
     g.votes = {};
     g.cards = {};
+    g.paused = false; g.pauseRemaining = 0;
     setTimer(room, "phase", g.settings.proposeSeconds * 1000, () => autoPropose(room));
     broadcastState(room);
   }
@@ -379,7 +394,27 @@ module.exports = (api) => {
     clearTimer(room, "phase");
     room.phase = "teamVote";
     g.votes = {};
+    g.paused = false; g.pauseRemaining = 0;
     setTimer(room, "phase", g.settings.voteSeconds * 1000, () => resolveVotes(room, true));
+    broadcastState(room);
+  }
+
+  // Host pauses/resumes the current nomination or voting timer.
+  function onPause(ws, room) {
+    if (!isHost(ws, room)) return;
+    const g = room.g;
+    if (room.phase !== "proposal" && room.phase !== "teamVote") return;
+    if (!g.paused) {
+      const at = timerDeadline(room, "phase");
+      g.pauseRemaining = at ? Math.max(0, at - api.now()) : 0;
+      clearTimer(room, "phase");
+      g.paused = true;
+    } else {
+      g.paused = false;
+      const ms = g.pauseRemaining || 1000;
+      if (room.phase === "proposal") setTimer(room, "phase", ms, () => autoPropose(room));
+      else setTimer(room, "phase", ms, () => resolveVotes(room, true));
+    }
     broadcastState(room);
   }
 
@@ -406,9 +441,11 @@ module.exports = (api) => {
       team: g.team.map(id => ({ id, name: nameOf(room, id) })),
       timedOut: !!byTimer,
     };
+    // Keep a running record of every nomination for the history panel.
+    g.voteHistory.push(Object.assign({ quest: g.quest, attempt: g.rejectCount + 1 }, g.lastVote));
     room.phase = "voteReveal";
     broadcastState(room);
-    setTimer(room, "phase", 6000, () => afterVoteReveal(room, approved));
+    setTimer(room, "phase", VOTE_REVEAL_MS, () => afterVoteReveal(room, approved));
   }
 
   function afterVoteReveal(room, approved) {
@@ -453,9 +490,10 @@ module.exports = (api) => {
     const success = fails < required;
     g.questResults[g.quest] = { success, fails };
     g.lastQuest = { quest: g.quest, fails, success, required };
+    g.missionHistory.push({ quest: g.quest, fails, success, required, team: g.team.map(id => nameOf(room, id)) });
     room.phase = "questReveal";
     broadcastState(room);
-    setTimer(room, "phase", 7000, () => afterQuestReveal(room));
+    setTimer(room, "phase", QUEST_REVEAL_MS, () => afterQuestReveal(room));
   }
 
   function afterQuestReveal(room) {

@@ -404,6 +404,9 @@ function clearSession() { session = {}; sessionStorage.removeItem(KEY); }
 function rejoinLink(id) { return location.origin + "/" + GAME + "?code=" + state.code + "&pid=" + id; }
 function copyRejoin(id, name) {
   const url = rejoinLink(id);
+  const title = "Rejoin the Imposter game as " + name;
+  // On phones, open the native share sheet so the host can send it via any app.
+  if (navigator.share) { navigator.share({ title, text: title, url }).catch(() => {}); return; }
   const done = () => banner("Reconnect link for " + name + " copied — send it to them.");
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt("Reconnect link for " + name + ":", url));
   else prompt("Reconnect link for " + name + ":", url);

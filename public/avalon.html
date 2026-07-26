@@ -72,6 +72,19 @@
   .roombar .rb-chip.off { opacity: 0.55; }
   .roombar .rb-off { color: var(--danger); }
   .roombar .rb-act { border: none; cursor: pointer; font-family: inherit; }
+  .roombar .rb-hist { background: var(--accent); color: #fff; }
+  /* history view */
+  .hist-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  .hist-sec { font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); margin: 14px 0 8px; }
+  .hist-empty { color: var(--muted); font-size: 0.9rem; }
+  .hist-item { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
+  .hist-item .hi-top { display: flex; justify-content: space-between; align-items: baseline; gap: 10px; font-weight: 700; }
+  .hist-item .hi-res.good { color: var(--good); } .hist-item .hi-res.bad { color: var(--danger); }
+  .hist-item .hi-team { color: var(--muted); font-size: 0.88rem; margin-top: 4px; }
+  .hist-item .hi-votes { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .hi-v { font-size: 0.76rem; padding: 3px 9px; border-radius: 999px; }
+  .hi-v.y { background: rgba(29,209,161,0.18); color: var(--good); }
+  .hi-v.n { background: rgba(255,107,107,0.18); color: var(--danger); }
   .prow.me { border: 1.5px solid var(--accent2); }
   .prow.leader { border: 1.5px solid var(--gold); }
   .prow.sel { border: 1.5px solid var(--good); background: rgba(29,209,161,0.14); }
@@ -231,6 +244,7 @@
     <div class="clock" id="propClock"></div>
     <div class="players" id="proposeList"></div>
     <button class="btn gold hidden" id="proposeBtn">Send team to vote</button>
+    <button class="btn ghost hidden" id="pausePropBtn"></button>
     <button class="btn ghost hidden" id="forceProp">Skip nomination (host)</button>
   </section>
 
@@ -245,6 +259,7 @@
       <button class="btn danger" id="rejectBtn">👎 Reject</button>
     </div>
     <p class="hint" id="voteProgress" style="text-align:center;margin-top:14px;"></p>
+    <button class="btn ghost hidden" id="pauseVoteBtn"></button>
     <button class="btn ghost hidden" id="forceVote">Tally now (host)</button>
   </section>
 
@@ -287,6 +302,15 @@
       <button class="btn secondary" id="toLobbyBtn">Lobby</button>
     </div>
     <p class="hint" id="resultWait" style="text-align:center;">Waiting for the host…</p>
+  </section>
+
+  <!-- HISTORY (its own view) -->
+  <section id="history" class="screen hidden">
+    <div class="hist-head">
+      <h1 style="margin:0;font-size:1.4rem;">📜 <span class="em">History</span></h1>
+      <button class="btn secondary" id="histBack" style="width:auto;margin:0;padding:10px 16px;">← Back</button>
+    </div>
+    <div id="historyBody"></div>
   </section>
 
   <!-- CHAT -->
@@ -366,15 +390,42 @@ function renderRoomBar() {
       const inner = escapeHtml(p.name) + (p.isHost ? ' <span class="rb-h">★</span>' : '') + (off ? ' <span class="rb-off">⚠</span>' : '');
       if (host && !me) return '<button class="rb-chip rb-act ' + (off ? "off" : "") + '" data-link="' + p.id + '" title="Copy reconnect link">' + inner + ' 🔗</button>';
       return '<span class="rb-chip ' + (me ? "me" : "") + ' ' + (off ? "off" : "") + '">' + inner + '</span>';
-    }).join("");
+    }).join("") +
+    '<button class="rb-chip rb-act rb-hist" data-history="1">📜 History</button>';
 }
 $("roomBar").onclick = e => {
+  if (e.target.closest("[data-history]")) { openHistory(); return; }
   const b = e.target.closest("[data-link]");
   if (!b || !amHost()) return;
   const id = b.getAttribute("data-link");
   const p = (state.roster || []).find(x => x.id === id);
   copyRejoin(id, p ? p.name : "player");
 };
+
+// ---- history view (its own tab; stays open and updates live) ----
+function openHistory() { viewingHistory = true; render(); }
+$("histBack").onclick = () => { viewingHistory = false; render(); };
+function renderHistory() {
+  const missions = (state && state.missionHistory) || [];
+  const votes = (state && state.voteHistory) || [];
+  let html = '<div class="hist-sec">Missions</div>';
+  html += missions.length ? missions.map(m =>
+    '<div class="hist-item"><div class="hi-top"><span>Quest ' + (m.quest + 1) + '</span>' +
+    '<span class="hi-res ' + (m.success ? "good" : "bad") + '">' + (m.success ? "✅ Success" : "❌ Fail") +
+    ' · ' + m.fails + ' fail' + (m.fails === 1 ? "" : "s") + '</span></div>' +
+    '<div class="hi-team">' + (m.team || []).map(escapeHtml).join(", ") + '</div></div>').join("")
+    : '<div class="hist-empty">No missions completed yet.</div>';
+  html += '<div class="hist-sec">Nominations</div>';
+  html += votes.length ? votes.map(v =>
+    '<div class="hist-item"><div class="hi-top"><span>Quest ' + (v.quest + 1) + ' · ' + escapeHtml(v.leaderName) + ' led</span>' +
+    '<span class="hi-res ' + (v.approved ? "good" : "bad") + '">' + (v.approved ? "Approved" : "Rejected") + (v.timedOut ? " (time up)" : "") + '</span></div>' +
+    '<div class="hi-team">Team: ' + (v.team || []).map(t => escapeHtml(t.name)).join(", ") + '</div>' +
+    '<div class="hi-votes">' + (v.tally || []).map(t =>
+      '<span class="hi-v ' + (t.approve ? "y" : "n") + '">' + escapeHtml(t.name) + ' ' + (t.approve ? "👍" : "👎") + '</span>').join("") +
+    '</div></div>').join("")
+    : '<div class="hist-empty">No nominations yet.</div>';
+  $("historyBody").innerHTML = html;
+}
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
 const KEY = "qfin_session";
@@ -398,6 +449,9 @@ function clearSession() { session = {}; sessionStorage.removeItem(KEY); }
 function rejoinLink(id) { return location.origin + "/" + GAME + "?code=" + state.code + "&pid=" + id; }
 function copyRejoin(id, name) {
   const url = rejoinLink(id);
+  const title = "Rejoin the Avalon game as " + name;
+  // On phones, open the native share sheet so the host can send it via any app.
+  if (navigator.share) { navigator.share({ title, text: title, url }).catch(() => {}); return; }
   const done = () => banner("Reconnect link for " + name + " copied — send it to them.");
   if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt("Reconnect link for " + name + ":", url));
   else prompt("Reconnect link for " + name + ":", url);
@@ -411,6 +465,7 @@ let myVote = null;          // my approve/reject this proposal
 let myCard = null;          // my quest card this quest
 let assassinPick = null;
 let lastTeamKey = "", lastQuestKey = "";
+let viewingHistory = false;   // showing the History tab instead of the game view
 
 function wsUrl() { return (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws"; }
 function connect() {
@@ -457,7 +512,7 @@ function onMessage(msg) {
   }
 }
 
-const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result"];
+const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result","history"];
 function showScreen(id) {
   SCREENS.forEach(s => $(s).classList.toggle("hidden", s !== id));
   $("chatPanel").classList.toggle("hidden", id === "home");
@@ -486,7 +541,13 @@ function render() {
   const questKey = "q" + state.quest + ":" + state.phase;
   if (state.phase === "quest" && questKey !== lastQuestKey) { myCard = null; lastQuestKey = questKey; }
 
+  if (state.phase === "lobby" || state.phase === "home") viewingHistory = false;
+
   renderRoomBar();
+  // History is its own tab: keep showing it (with fresh data) until Back.
+  if (viewingHistory && state.phase !== "lobby") {
+    renderHistory(); showScreen("history"); renderChat(); return;
+  }
   if (state.phase === "lobby")       renderLobby();
   else if (state.phase === "roleReveal") renderRole();
   else if (state.phase === "proposal")   renderProposal();
@@ -622,7 +683,8 @@ function renderProposal() {
   btn.disabled = selected.size !== size;
   btn.textContent = "Send team (" + selected.size + "/" + size + ")";
   $("forceProp").classList.toggle("hidden", !(amHost() && !iLead));
-  startClock($("propClock"), state.deadline);
+  renderPauseBtn($("pausePropBtn"));
+  showClock($("propClock"), state.deadline);
 }
 $("proposeList").onclick = e => {
   if (state.leaderId !== myId()) return;
@@ -647,11 +709,20 @@ function renderVote() {
   $("approveBtn").style.opacity = myVote === true ? "1" : (myVote === false ? "0.5" : "1");
   $("rejectBtn").style.opacity = myVote === false ? "1" : (myVote === true ? "0.5" : "1");
   $("forceVote").classList.toggle("hidden", !amHost());
-  startClock($("voteClock"), state.deadline);
+  renderPauseBtn($("pauseVoteBtn"));
+  showClock($("voteClock"), state.deadline);
 }
 $("approveBtn").onclick = () => { myVote = true; sendMsg({ type: "avVote", approve: true }); renderVote(); };
 $("rejectBtn").onclick = () => { myVote = false; sendMsg({ type: "avVote", approve: false }); renderVote(); };
 $("forceVote").onclick = () => sendMsg({ type: "avForce" });
+
+// host pause/resume of the nomination/voting timer
+function renderPauseBtn(btn) {
+  btn.classList.toggle("hidden", !amHost());
+  btn.textContent = state.paused ? "▶ Resume timer" : "⏸ Pause timer";
+}
+$("pausePropBtn").onclick = () => { if (amHost()) sendMsg({ type: "avPause" }); };
+$("pauseVoteBtn").onclick = () => { if (amHost()) sendMsg({ type: "avPause" }); };
 
 // ---- vote reveal ----
 function renderVoteReveal() {
@@ -750,6 +821,16 @@ $("beginBtn").onclick = () => sendMsg({ type: "avBegin" });
 
 // ---- countdown clock ----
 let clockTimer = null, clockEl = null, clockDeadline = null;
+// Show the clock, honoring a host pause: when paused, freeze the remaining time.
+function showClock(el, deadline) {
+  if (state.paused) {
+    clearInterval(clockTimer); clockDeadline = null; clockEl = null;
+    el.textContent = fmtClock(Math.ceil((state.pauseRemaining || 0) / 1000)) + "  ⏸ paused";
+    el.classList.remove("warn");
+    return;
+  }
+  startClock(el, deadline);
+}
 function startClock(el, deadline) {
   clockEl = el; clockDeadline = deadline;
   tickClock();
