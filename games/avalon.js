@@ -577,12 +577,15 @@ module.exports = (api) => {
 
   function startAssassinate(room) {
     const g = room.g;
-    const assassin = g.order.find(id => room.players.get(id)?.role === "assassin");
-    if (!assassin) {
-      // No assassin in play (shouldn't happen) — good simply wins.
-      return endGame(room, "good", "Three quests succeeded and there is no Assassin. Good wins!");
+    // Morgana takes the assassination shot; fall back to the Assassin if she's
+    // not in the game.
+    const shooter = g.order.find(id => room.players.get(id)?.role === "morgana")
+                 || g.order.find(id => room.players.get(id)?.role === "assassin");
+    if (!shooter) {
+      // Nobody can assassinate — good simply wins.
+      return endGame(room, "good", "Three quests succeeded and there is no assassin. Good wins!");
     }
-    g.assassinId = assassin;
+    g.assassinId = shooter;
     room.phase = "assassinate";
     broadcastState(room);
   }
@@ -618,15 +621,20 @@ module.exports = (api) => {
   function endGame(room, winner, reason, assassinatedId) {
     const g = room.g;
     clearTimers(room);
-    // Roles are NOT revealed at the end — only the outcome. The one exception is
-    // the assassination: revealing who was shot and who Merlin actually was is
-    // the whole payoff of that ending.
-    const result = { winner, reason, questResults: g.questResults };
-    if (assassinatedId) {
-      const merlin = g.order.find(id => room.players.get(id)?.role === "merlin");
-      result.assassin = { name: nameOf(room, g.assassinId), target: nameOf(room, assassinatedId), merlin: merlin ? nameOf(room, merlin) : null };
-    }
-    g.result = result;
+    const players = g.order.map(id => {
+      const p = room.players.get(id);
+      const role = p?.role || "servant";
+      return { id, name: nameOf(room, id), role, roleLabel: ROLE_META[role].label, team: ROLE_META[role].team };
+    });
+    const merlin = g.order.find(id => room.players.get(id)?.role === "merlin");
+    g.result = {
+      winner, reason,
+      players,
+      questResults: g.questResults,
+      merlinName: merlin ? nameOf(room, merlin) : null,
+      assassinName: g.assassinId ? nameOf(room, g.assassinId) : null,
+      assassinatedName: assassinatedId ? nameOf(room, assassinatedId) : null,
+    };
     room.phase = "result";
     broadcastState(room);
   }

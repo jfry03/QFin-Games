@@ -145,10 +145,12 @@ function testAvalon() {
   ok(room.phase === "assassinate", "3 quests passed -> assassinate");
   ok(room._state.score.good === 3, "good score = 3");
 
-  const assassin = ps.find(p => p.role === "assassin");
-  const nonMerlin = ps.find(p => p.id !== assassin.id && p.role !== "merlin");
-  game.onMessage(assassin.ws, { type: "avAssassinate", target: nonMerlin.id }, room);
-  ok(room.phase === "result" && room.g.result.winner === "good", "assassin misses Merlin -> good wins");
+  // Morgana is the shooter (falls back to Assassin if absent).
+  const shooter = () => ps.find(p => p.id === room.g.assassinId);
+  ok(shooter().role === "morgana", "Morgana takes the assassination shot");
+  const nonMerlin = ps.find(p => p.id !== shooter().id && p.role !== "merlin");
+  game.onMessage(shooter().ws, { type: "avAssassinate", target: nonMerlin.id }, room);
+  ok(room.phase === "result" && room.g.result.winner === "good", "shooter misses Merlin -> good wins");
 
   // play again, assassinate Merlin -> evil
   game.onMessage(host, { type: "start" }, room);
@@ -156,9 +158,8 @@ function testAvalon() {
   driveAvalon(game, room, fire, { sabotage: false });
   ok(room.phase === "assassinate", "reached assassinate again");
   const merlin2 = ps.find(p => p.role === "merlin");
-  const assassin2 = ps.find(p => p.role === "assassin");
-  game.onMessage(assassin2.ws, { type: "avAssassinate", target: merlin2.id }, room);
-  ok(room.g.result.winner === "evil", "assassin finds Merlin -> evil wins");
+  game.onMessage(shooter().ws, { type: "avAssassinate", target: merlin2.id }, room);
+  ok(room.g.result.winner === "evil", "shooter finds Merlin -> evil wins");
 
   // play again, evil sabotages 3 quests -> evil wins (no assassin phase)
   game.onMessage(host, { type: "start" }, room);
