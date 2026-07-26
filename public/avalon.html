@@ -60,6 +60,7 @@
 
   .players { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
   .prow { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 14px 16px; border-radius: 14px; }
+  .prow > span:first-child { font-weight: 700; font-size: 1.05rem; }
   .prow .tag { color: var(--gold); font-size: 0.75rem; font-weight: 700; }
   .prow .rside { display: flex; align-items: center; gap: 8px; }
   .prow.off { opacity: 0.55; }
@@ -116,7 +117,7 @@
   .clock.warn { color: var(--danger); }
 
   .team-names { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0 16px; }
-  .team-names .tn { background: var(--card2); border-radius: 999px; padding: 8px 14px; font-weight: 700; }
+  .team-names .tn { background: var(--card2); border-radius: 999px; padding: 9px 15px; font-weight: 700; font-size: 1.02rem; }
 
   .result-banner { text-align: center; padding: 22px; border-radius: var(--radius); margin-bottom: 16px; font-size: 1.35rem; font-weight: 800; }
   .result-banner.good { background: rgba(29,209,161,0.15); color: var(--good); }
@@ -148,10 +149,10 @@
   .comp-sel { flex: 1; padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--card2); background: var(--card2); color: var(--text); font-size: 1rem; font-weight: 600; outline: none; -webkit-appearance: none; appearance: none; }
   .comp-sel:disabled { opacity: 0.8; }
   /* roster strip shown across in-game screens */
-  .roombar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--card); border-radius: 12px; padding: 8px 10px; margin-bottom: 14px; }
-  .roombar .rb-lbl { font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
-  .roombar .rb-chip { background: var(--card2); border-radius: 999px; padding: 4px 10px; font-size: 0.82rem; font-weight: 600; }
-  .roombar .rb-chip.me { border: 1px solid var(--accent2); }
+  .roombar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; background: var(--card); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; }
+  .roombar .rb-lbl { flex-basis: 100%; font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-bottom: 2px; }
+  .roombar .rb-chip { background: var(--card2); border-radius: 999px; padding: 7px 13px; font-size: 0.98rem; font-weight: 700; color: var(--text); }
+  .roombar .rb-chip.me { border: 1.5px solid var(--accent2); color: var(--accent2); }
   .roombar .rb-chip .rb-h { color: var(--gold); }
 </style>
 </head>
@@ -470,7 +471,8 @@ function myId() { return session.playerId; }
 
 function nameMap() {
   const m = {};
-  (state.players || []).forEach(p => { m[p.id] = p.name; });
+  // Resolve from the full roster so dropped players still show their name.
+  (state.roster || state.players || []).forEach(p => { m[p.id] = p.name; });
   return m;
 }
 
