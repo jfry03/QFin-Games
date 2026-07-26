@@ -51,6 +51,9 @@ const EVIL_ROLES = ["assassin", "morgana", "mordred", "oberon", "minion"];
 // Overridable via env so automated tests can run fast.
 const VOTE_REVEAL_MS  = parseInt(process.env.AV_VOTE_REVEAL_MS  || "6000", 10);
 const QUEST_REVEAL_MS = parseInt(process.env.AV_QUEST_REVEAL_MS || "7000", 10);
+// A player's "time chip" freezes the current nomination/voting clock for a break.
+const TIMEOUT_MS = parseInt(process.env.AV_TIMEOUT_MS || "180000", 10);   // 3 minutes
+const CHIPS_PER_GAME = 1;
 
 function shuffle(a) {
   const arr = a.slice();
@@ -102,6 +105,7 @@ module.exports = (api) => {
     player.team = null;
     player.knows = null;      // [{ id, note }] — SECRET
     player.seesLabel = null;  // heading for the "you see" list — SECRET
+    player.chips = CHIPS_PER_GAME;   // "time chip" timeouts left this game
   }
 
   function init(room) {
@@ -127,6 +131,7 @@ module.exports = (api) => {
       missionHistory: [],   // every completed quest
       paused: false,        // host paused the current nomination/vote timer
       pauseRemaining: 0,    // ms left on the timer when it was paused
+      timeout: null,        // { by, remaining, until } while a time-chip break runs
       assassinId: null,
       result: null,
     };
@@ -219,6 +224,7 @@ module.exports = (api) => {
         voteSeconds: g.settings.voteSeconds,
       },
       order: g.order,
+      leaderId: g.order.length ? g.order[g.leaderIndex] : null,
       quest: g.quest,
       questResults: g.questResults,
       rejectCount: g.rejectCount,
@@ -255,7 +261,8 @@ module.exports = (api) => {
     if (room.phase === "proposal" || room.phase === "teamVote") {
       st.paused = g.paused;
       st.pauseRemaining = g.pauseRemaining;
-      st.deadline = g.paused ? null : timerDeadline(room, "phase");
+      st.timeout = g.timeout ? { by: g.timeout.by, until: g.timeout.until } : null;
+      st.deadline = (g.paused || g.timeout) ? null : timerDeadline(room, "phase");
     }
     if (room.phase === "teamVote") {
       st.voted = Object.keys(g.votes);
@@ -297,6 +304,7 @@ module.exports = (api) => {
       case "avAssassinate":  return onAssassinate(ws, msg, room);
       case "avForce":        return onForce(ws, room);
       case "avPause":        return onPause(ws, room);
+      case "avChip":         return onChip(ws, room);
       case "lobby":          return onLobby(ws, room);
     }
   }
@@ -339,6 +347,8 @@ module.exports = (api) => {
     g.missionHistory = [];
     g.paused = false;
     g.pauseRemaining = 0;
+    g.timeout = null;
+    for (const p of room.players.values()) p.chips = CHIPS_PER_GAME;   // fresh time chips
     g.assassinId = null;
     g.result = null;
     deal(room);
@@ -362,6 +372,7 @@ module.exports = (api) => {
     g.votes = {};
     g.cards = {};
     g.paused = false; g.pauseRemaining = 0;
+    g.timeout = null; clearTimer(room, "timeout");
     setTimer(room, "phase", g.settings.proposeSeconds * 1000, () => autoPropose(room));
     broadcastState(room);
   }
@@ -395,7 +406,37 @@ module.exports = (api) => {
     room.phase = "teamVote";
     g.votes = {};
     g.paused = false; g.pauseRemaining = 0;
+    g.timeout = null; clearTimer(room, "timeout");
     setTimer(room, "phase", g.settings.voteSeconds * 1000, () => resolveVotes(room, true));
+    broadcastState(room);
+  }
+
+  // A player spends a "time chip": freeze the current nomination/voting clock
+  // for a 3-minute break, then auto-resume with the time that was left.
+  function onChip(ws, room) {
+    const g = room.g;
+    const player = room.players.get(ws.playerId);
+    if (!player) return;
+    if (room.phase !== "proposal" && room.phase !== "teamVote") return;
+    if (g.paused || g.timeout) return;              // one break at a time
+    if (!(player.chips > 0)) return;
+    const at = timerDeadline(room, "phase");
+    const remaining = at ? Math.max(0, at - api.now())
+      : (room.phase === "proposal" ? g.settings.proposeSeconds * 1000 : g.settings.voteSeconds * 1000);
+    clearTimer(room, "phase");
+    player.chips--;
+    g.timeout = { by: player.name, remaining, until: api.now() + TIMEOUT_MS };
+    setTimer(room, "timeout", TIMEOUT_MS, () => resumeFromTimeout(room));
+    broadcastState(room);
+  }
+
+  function resumeFromTimeout(room) {
+    const g = room.g;
+    if (!g.timeout) return;
+    const ms = g.timeout.remaining || 1000;
+    g.timeout = null;
+    if (room.phase === "proposal") setTimer(room, "phase", ms, () => autoPropose(room));
+    else if (room.phase === "teamVote") setTimer(room, "phase", ms, () => resolveVotes(room, true));
     broadcastState(room);
   }
 
@@ -404,6 +445,7 @@ module.exports = (api) => {
     if (!isHost(ws, room)) return;
     const g = room.g;
     if (room.phase !== "proposal" && room.phase !== "teamVote") return;
+    if (g.timeout) return;   // a time-chip break is running
     if (!g.paused) {
       const at = timerDeadline(room, "phase");
       g.pauseRemaining = at ? Math.max(0, at - api.now()) : 0;
@@ -430,6 +472,7 @@ module.exports = (api) => {
   function resolveVotes(room, byTimer) {
     const g = room.g;
     clearTimer(room, "phase");
+    clearTimer(room, "timeout"); g.timeout = null;
     const voters = electorate(room);
     // On a timeout, anyone who didn't vote counts as a reject.
     const tally = voters.map(p => ({ id: p.id, name: p.name, approve: g.votes[p.id] === true }));
@@ -571,6 +614,7 @@ module.exports = (api) => {
   function onLobby(ws, room) {
     if (!isHost(ws, room)) return;
     clearTimers(room);
+    room.g.timeout = null;
     room.phase = "lobby";
     broadcastState(room);
   }

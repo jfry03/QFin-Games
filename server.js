@@ -102,7 +102,7 @@ function baseState(room) {
     // Everyone in the room, including players who dropped (connected: false), so
     // the host can see who's missing and hand them a reconnect link.
     roster: [...room.players.values()]
-      .map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId, connected: p.connected })),
+      .map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId, connected: p.connected, chips: p.chips })),
     chat: room.chat.slice(-60),
   };
 }

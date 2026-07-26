@@ -72,9 +72,28 @@
   .roombar .rb-chip.off { opacity: 0.55; }
   .roombar .rb-off { color: var(--danger); }
   .roombar .rb-act { border: none; cursor: pointer; font-family: inherit; }
-  .roombar .rb-hist { background: var(--accent); color: #fff; }
-  /* history view */
+  /* dropped-player alert (host) */
+  .drop-alert { background: rgba(255,107,107,0.14); border: 1px solid var(--danger); border-radius: 12px; padding: 10px 12px; margin-bottom: 14px; display: flex; flex-direction: column; gap: 8px; }
+  .drop-alert .da-row { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: 0.9rem; }
+  .drop-alert .da-btn { width: auto; margin: 0; padding: 8px 12px; font-size: 0.82rem; flex: none; }
+  /* tab bar */
+  .nav-tabs { display: flex; gap: 8px; margin-bottom: 14px; }
+  .nav-tab { flex: 1; padding: 10px; border: 1.5px solid var(--card); background: var(--card); color: var(--text); border-radius: 12px; font-weight: 700; font-size: 0.92rem; cursor: pointer; }
+  .nav-tab.on { border-color: var(--accent2); background: rgba(108,92,231,0.28); color: var(--accent2); }
+  /* history / order views */
   .hist-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+  /* seating circle */
+  .circle { position: relative; width: 100%; max-width: 340px; margin: 18px auto; aspect-ratio: 1 / 1; }
+  .circle-center { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); text-align: center; }
+  .circle-center .cc-lbl { font-size: 0.72rem; letter-spacing: 1px; text-transform: uppercase; color: var(--muted); }
+  .circle-center .cc-name { font-size: 1.15rem; font-weight: 800; color: var(--gold); }
+  .seat { position: absolute; transform: translate(-50%,-50%); display: flex; flex-direction: column; align-items: center; gap: 3px; width: 84px; }
+  .seat .seat-n { width: 24px; height: 24px; border-radius: 50%; background: var(--card2); color: var(--muted); font-size: 0.75rem; font-weight: 800; display: flex; align-items: center; justify-content: center; }
+  .seat .seat-name { background: var(--card); border-radius: 999px; padding: 5px 10px; font-size: 0.82rem; font-weight: 700; max-width: 84px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .seat.me .seat-name { border: 1.5px solid var(--accent2); }
+  .seat.leader .seat-n { background: var(--gold); color: #241c00; }
+  .seat.leader .seat-name { background: rgba(246,196,83,0.2); color: var(--gold); }
+  .seat.off { opacity: 0.5; }
   .hist-sec { font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; color: var(--gold); margin: 14px 0 8px; }
   .hist-empty { color: var(--muted); font-size: 0.9rem; }
   .hist-item { background: var(--card); border-radius: 12px; padding: 12px 14px; margin-bottom: 8px; }
@@ -173,6 +192,8 @@
 <div id="app">
   <div id="banner" class="banner hidden"></div>
   <div id="roomBar" class="roombar hidden"></div>
+  <div id="navTabs" class="nav-tabs hidden"></div>
+  <div id="dropAlert" class="drop-alert hidden"></div>
 
   <!-- HOME -->
   <section id="home" class="screen">
@@ -244,6 +265,7 @@
     <div class="clock" id="propClock"></div>
     <div class="players" id="proposeList"></div>
     <button class="btn gold hidden" id="proposeBtn">Send team to vote</button>
+    <button class="btn secondary hidden" id="chipPropBtn"></button>
     <button class="btn ghost hidden" id="pausePropBtn"></button>
     <button class="btn ghost hidden" id="forceProp">Skip nomination (host)</button>
   </section>
@@ -259,6 +281,7 @@
       <button class="btn danger" id="rejectBtn">👎 Reject</button>
     </div>
     <p class="hint" id="voteProgress" style="text-align:center;margin-top:14px;"></p>
+    <button class="btn secondary hidden" id="chipVoteBtn"></button>
     <button class="btn ghost hidden" id="pauseVoteBtn"></button>
     <button class="btn ghost hidden" id="forceVote">Tally now (host)</button>
   </section>
@@ -302,6 +325,15 @@
       <button class="btn secondary" id="toLobbyBtn">Lobby</button>
     </div>
     <p class="hint" id="resultWait" style="text-align:center;">Waiting for the host…</p>
+  </section>
+
+  <!-- ORDER (its own view) -->
+  <section id="order" class="screen hidden">
+    <div class="hist-head">
+      <h1 style="margin:0;font-size:1.4rem;">🔄 <span class="em">Order</span></h1>
+      <button class="btn secondary" id="orderBack" style="width:auto;margin:0;padding:10px 16px;">← Back</button>
+    </div>
+    <div id="orderBody"></div>
   </section>
 
   <!-- HISTORY (its own view) -->
@@ -390,11 +422,9 @@ function renderRoomBar() {
       const inner = escapeHtml(p.name) + (p.isHost ? ' <span class="rb-h">★</span>' : '') + (off ? ' <span class="rb-off">⚠</span>' : '');
       if (host && !me) return '<button class="rb-chip rb-act ' + (off ? "off" : "") + '" data-link="' + p.id + '" title="Copy reconnect link">' + inner + ' 🔗</button>';
       return '<span class="rb-chip ' + (me ? "me" : "") + ' ' + (off ? "off" : "") + '">' + inner + '</span>';
-    }).join("") +
-    '<button class="rb-chip rb-act rb-hist" data-history="1">📜 History</button>';
+    }).join("");
 }
 $("roomBar").onclick = e => {
-  if (e.target.closest("[data-history]")) { openHistory(); return; }
   const b = e.target.closest("[data-link]");
   if (!b || !amHost()) return;
   const id = b.getAttribute("data-link");
@@ -402,9 +432,36 @@ $("roomBar").onclick = e => {
   copyRejoin(id, p ? p.name : "player");
 };
 
-// ---- history view (its own tab; stays open and updates live) ----
-function openHistory() { viewingHistory = true; render(); }
-$("histBack").onclick = () => { viewingHistory = false; render(); };
+// ---- tab bar: every player can open the Order and History views ----
+function renderNavTabs() {
+  $("navTabs").innerHTML =
+    '<button class="nav-tab ' + (activeTab === "order" ? "on" : "") + '" data-tab="order">🔄 Order</button>' +
+    '<button class="nav-tab ' + (activeTab === "history" ? "on" : "") + '" data-tab="history">📜 History</button>';
+}
+$("navTabs").onclick = e => {
+  const b = e.target.closest("[data-tab]"); if (!b) return;
+  const t = b.getAttribute("data-tab");
+  activeTab = (activeTab === t) ? null : t;   // toggle
+  render();
+};
+$("histBack").onclick = () => { activeTab = null; render(); };
+$("orderBack").onclick = () => { activeTab = null; render(); };
+
+// ---- dropped-player alert: clear, host-facing "bring them back" prompt ----
+function renderDropAlert() {
+  const drops = (state.roster || []).filter(p => p.connected === false);
+  if (!amHost() || !drops.length) { $("dropAlert").classList.add("hidden"); return; }
+  $("dropAlert").classList.remove("hidden");
+  $("dropAlert").innerHTML = drops.map(p =>
+    '<div class="da-row"><span>⚠ <b>' + escapeHtml(p.name) + '</b> left</span>' +
+    '<button class="btn gold da-btn" data-recon="' + p.id + '">🔗 Send reconnect link</button></div>').join("");
+}
+$("dropAlert").onclick = e => {
+  const b = e.target.closest("[data-recon]"); if (!b) return;
+  const id = b.getAttribute("data-recon");
+  const p = (state.roster || []).find(x => x.id === id);
+  copyRejoin(id, p ? p.name : "player");
+};
 function renderHistory() {
   const missions = (state && state.missionHistory) || [];
   const votes = (state && state.voteHistory) || [];
@@ -425,6 +482,32 @@ function renderHistory() {
     '</div></div>').join("")
     : '<div class="hist-empty">No nominations yet.</div>';
   $("historyBody").innerHTML = html;
+}
+
+// ---- order view: players in a circle, leader highlighted ----
+function renderOrder() {
+  const order = state.order || [];
+  const names = nameMap();
+  const roster = state.roster || [];
+  const leaderId = state.leaderId;
+  const n = order.length;
+  const R = 40; // % radius
+  const seats = order.map((id, i) => {
+    const ang = (i / n) * 2 * Math.PI - Math.PI / 2;   // start at top
+    const x = 50 + R * Math.cos(ang), y = 50 + R * Math.sin(ang);
+    const isLeader = id === leaderId, me = id === myId();
+    const off = roster.some(p => p.id === id && p.connected === false);
+    return '<div class="seat ' + (isLeader ? "leader " : "") + (me ? "me " : "") + (off ? "off" : "") +
+      '" style="left:' + x + '%;top:' + y + '%">' +
+      '<span class="seat-n">' + (i + 1) + '</span>' +
+      '<span class="seat-name">' + escapeHtml(names[id] || "?") + '</span></div>';
+  }).join("");
+  const center = leaderId
+    ? '<div class="circle-center"><div class="cc-lbl">👑 Leader</div><div class="cc-name">' + escapeHtml(names[leaderId] || "?") + '</div></div>'
+    : '<div class="circle-center"><div class="cc-lbl">Seating</div></div>';
+  $("orderBody").innerHTML =
+    '<p class="sub" style="text-align:center;">Leadership passes <b>clockwise</b> ↻ — each leader nominates the quest team, then it moves to the next seat.</p>' +
+    '<div class="circle">' + center + seats + '</div>';
 }
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
@@ -465,7 +548,7 @@ let myVote = null;          // my approve/reject this proposal
 let myCard = null;          // my quest card this quest
 let assassinPick = null;
 let lastTeamKey = "", lastQuestKey = "";
-let viewingHistory = false;   // showing the History tab instead of the game view
+let activeTab = null;   // null (game view) | "order" | "history"
 
 function wsUrl() { return (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws"; }
 function connect() {
@@ -512,14 +595,17 @@ function onMessage(msg) {
   }
 }
 
-const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result","history"];
+const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result","order","history"];
 function showScreen(id) {
   SCREENS.forEach(s => $(s).classList.toggle("hidden", s !== id));
   $("chatPanel").classList.toggle("hidden", id === "home");
   $("leaveFoot").classList.toggle("hidden", id === "home");
-  // The roster strip shows in every in-room screen except the lobby (which has
-  // its own full player list) and home.
-  $("roomBar").classList.toggle("hidden", id === "home" || id === "lobby");
+  // The roster strip + tab bar show in every in-room screen except the lobby
+  // (which has its own full player list) and home.
+  const chrome = id === "home" || id === "lobby";
+  $("roomBar").classList.toggle("hidden", chrome);
+  $("navTabs").classList.toggle("hidden", chrome);
+  if (id === "home") $("dropAlert").classList.add("hidden");
 }
 function amHost() { return state && state.hostId === session.playerId; }
 function myId() { return session.playerId; }
@@ -541,12 +627,16 @@ function render() {
   const questKey = "q" + state.quest + ":" + state.phase;
   if (state.phase === "quest" && questKey !== lastQuestKey) { myCard = null; lastQuestKey = questKey; }
 
-  if (state.phase === "lobby" || state.phase === "home") viewingHistory = false;
+  if (state.phase === "lobby" || state.phase === "home") activeTab = null;
 
   renderRoomBar();
-  // History is its own tab: keep showing it (with fresh data) until Back.
-  if (viewingHistory && state.phase !== "lobby") {
-    renderHistory(); showScreen("history"); renderChat(); return;
+  renderNavTabs();
+  renderDropAlert();
+  // Order/History are their own tabs: keep showing (with fresh data) until Back.
+  if (activeTab && state.phase !== "lobby") {
+    if (activeTab === "order") { renderOrder(); showScreen("order"); }
+    else { renderHistory(); showScreen("history"); }
+    renderChat(); return;
   }
   if (state.phase === "lobby")       renderLobby();
   else if (state.phase === "roleReveal") renderRole();
@@ -683,6 +773,7 @@ function renderProposal() {
   btn.disabled = selected.size !== size;
   btn.textContent = "Send team (" + selected.size + "/" + size + ")";
   $("forceProp").classList.toggle("hidden", !(amHost() && !iLead));
+  renderChip($("chipPropBtn"));
   renderPauseBtn($("pausePropBtn"));
   showClock($("propClock"), state.deadline);
 }
@@ -709,6 +800,7 @@ function renderVote() {
   $("approveBtn").style.opacity = myVote === true ? "1" : (myVote === false ? "0.5" : "1");
   $("rejectBtn").style.opacity = myVote === false ? "1" : (myVote === true ? "0.5" : "1");
   $("forceVote").classList.toggle("hidden", !amHost());
+  renderChip($("chipVoteBtn"));
   renderPauseBtn($("pauseVoteBtn"));
   showClock($("voteClock"), state.deadline);
 }
@@ -718,11 +810,23 @@ $("forceVote").onclick = () => sendMsg({ type: "avForce" });
 
 // host pause/resume of the nomination/voting timer
 function renderPauseBtn(btn) {
-  btn.classList.toggle("hidden", !amHost());
+  btn.classList.toggle("hidden", !amHost() || !!state.timeout);
   btn.textContent = state.paused ? "▶ Resume timer" : "⏸ Pause timer";
 }
 $("pausePropBtn").onclick = () => { if (amHost()) sendMsg({ type: "avPause" }); };
 $("pauseVoteBtn").onclick = () => { if (amHost()) sendMsg({ type: "avPause" }); };
+
+// every player's "time chip": freeze the clock for a 3-minute break
+function renderChip(btn) {
+  const me = (state.roster || []).find(p => p.id === myId());
+  const myChips = me ? (me.chips || 0) : 0;
+  btn.classList.remove("hidden");
+  if (state.timeout) { btn.disabled = true; btn.textContent = "⏱ Timeout running…"; return; }
+  btn.disabled = myChips < 1 || state.paused;
+  btn.textContent = myChips > 0 ? ("⏱ Call timeout (3 min) · " + myChips + " left") : "⏱ No timeouts left";
+}
+$("chipPropBtn").onclick = () => sendMsg({ type: "avChip" });
+$("chipVoteBtn").onclick = () => sendMsg({ type: "avChip" });
 
 // ---- vote reveal ----
 function renderVoteReveal() {
@@ -820,9 +924,13 @@ $("toLobbyBtn").onclick = () => sendMsg({ type: "lobby" });
 $("beginBtn").onclick = () => sendMsg({ type: "avBegin" });
 
 // ---- countdown clock ----
-let clockTimer = null, clockEl = null, clockDeadline = null;
-// Show the clock, honoring a host pause: when paused, freeze the remaining time.
+let clockTimer = null, clockEl = null, clockDeadline = null, clockPrefix = "";
+// Show the clock, honoring a time-chip break or a host pause.
 function showClock(el, deadline) {
+  if (state.timeout) {   // 3-min break counting down to auto-resume
+    startClock(el, state.timeout.until, "⏱ " + state.timeout.by + "'s break · ");
+    return;
+  }
   if (state.paused) {
     clearInterval(clockTimer); clockDeadline = null; clockEl = null;
     el.textContent = fmtClock(Math.ceil((state.pauseRemaining || 0) / 1000)) + "  ⏸ paused";
@@ -831,8 +939,8 @@ function showClock(el, deadline) {
   }
   startClock(el, deadline);
 }
-function startClock(el, deadline) {
-  clockEl = el; clockDeadline = deadline;
+function startClock(el, deadline, prefix) {
+  clockEl = el; clockDeadline = deadline; clockPrefix = prefix || "";
   tickClock();
   clearInterval(clockTimer);
   clockTimer = setInterval(tickClock, 250);
@@ -841,8 +949,8 @@ function tickClock() {
   if (!clockEl || !clockDeadline) { if (clockEl) clockEl.textContent = ""; return; }
   const ms = Math.max(0, clockDeadline - Date.now());
   const secs = Math.ceil(ms / 1000);
-  clockEl.textContent = fmtClock(secs);
-  clockEl.classList.toggle("warn", secs <= 10);
+  clockEl.textContent = clockPrefix + fmtClock(secs);
+  clockEl.classList.toggle("warn", !clockPrefix && secs <= 10);
 }
 function fmtClock(secs) { const m = Math.floor(secs / 60), s = secs % 60; return m + ":" + String(s).padStart(2, "0"); }
 
