@@ -105,7 +105,7 @@ module.exports = (api) => {
     player.team = null;
     player.knows = null;      // [{ id, note }] — SECRET
     player.seesLabel = null;  // heading for the "you see" list — SECRET
-    player.chips = CHIPS_PER_GAME;   // "time chip" timeouts left this game
+    player.chips = room.g.settings.chipCount;   // "time chip" timeouts left this game
   }
 
   function init(room) {
@@ -116,6 +116,8 @@ module.exports = (api) => {
         // The role line-up: one entry per seat. null = derive a default from the
         // player count; the host edits it seat-by-seat in the lobby.
         composition: null,
+        chipCount: CHIPS_PER_GAME,                        // time-out chips per player per game
+        chipSeconds: Math.max(1, Math.round(TIMEOUT_MS / 1000)),  // how long a time-out freezes the clock
       },
       order: [],            // seat order (playerIds), fixed for the game
       leaderIndex: 0,
@@ -222,6 +224,8 @@ module.exports = (api) => {
       settings: {
         proposeSeconds: g.settings.proposeSeconds,
         voteSeconds: g.settings.voteSeconds,
+        chipCount: g.settings.chipCount,
+        chipSeconds: g.settings.chipSeconds,
       },
       order: g.order,
       leaderId: g.order.length ? g.order[g.leaderIndex] : null,
@@ -321,6 +325,8 @@ module.exports = (api) => {
       const comp = msg.composition.filter(r => ALL_ROLE_KEYS.includes(r));
       s.composition = comp.length ? comp : null;
     }
+    if ("chipCount" in msg) { const c = parseInt(msg.chipCount, 10); if (c >= 0 && c <= 5) s.chipCount = c; }
+    if ("chipSeconds" in msg) { const c = parseInt(msg.chipSeconds, 10); if (c >= 30 && c <= 600) s.chipSeconds = c; }
     broadcastState(room);
   }
 
@@ -348,7 +354,7 @@ module.exports = (api) => {
     g.paused = false;
     g.pauseRemaining = 0;
     g.timeout = null;
-    for (const p of room.players.values()) p.chips = CHIPS_PER_GAME;   // fresh time chips
+    for (const p of room.players.values()) p.chips = g.settings.chipCount;   // fresh time chips
     g.assassinId = null;
     g.result = null;
     deal(room);
@@ -423,10 +429,11 @@ module.exports = (api) => {
     const at = timerDeadline(room, "phase");
     const remaining = at ? Math.max(0, at - api.now())
       : (room.phase === "proposal" ? g.settings.proposeSeconds * 1000 : g.settings.voteSeconds * 1000);
+    const breakMs = g.settings.chipSeconds * 1000;
     clearTimer(room, "phase");
     player.chips--;
-    g.timeout = { by: player.name, remaining, until: api.now() + TIMEOUT_MS };
-    setTimer(room, "timeout", TIMEOUT_MS, () => resumeFromTimeout(room));
+    g.timeout = { by: player.name, remaining, until: api.now() + breakMs };
+    setTimer(room, "timeout", breakMs, () => resumeFromTimeout(room));
     broadcastState(room);
   }
 

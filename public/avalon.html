@@ -230,6 +230,16 @@
       <input type="range" class="range" id="voteRange" min="15" max="240" step="15" value="60">
       <div class="hint">Time to approve/reject once a team is nominated. Missing votes count as reject.</div>
     </div>
+    <div class="field">
+      <label>Time-out chips per player <span class="val-pill" id="chipCountVal">1</span></label>
+      <input type="range" class="range" id="chipCountRange" min="0" max="5" step="1" value="1">
+      <div class="hint">How many breaks each player can call to freeze the clock during nomination/voting.</div>
+    </div>
+    <div class="field">
+      <label>Time-out length <span class="val-pill" id="chipLenVal">3:00</span></label>
+      <input type="range" class="range" id="chipLenRange" min="30" max="600" step="30" value="180">
+      <div class="hint">How long each time-out freezes the clock before it auto-resumes.</div>
+    </div>
 
     <div class="field">
       <label>Roles <span class="val-pill" id="compPill">—</span></label>
@@ -325,6 +335,17 @@
       <button class="btn secondary" id="toLobbyBtn">Lobby</button>
     </div>
     <p class="hint" id="resultWait" style="text-align:center;">Waiting for the host…</p>
+  </section>
+
+  <!-- YOU (role reminder, its own view) -->
+  <section id="myrole" class="screen hidden">
+    <div class="hist-head">
+      <h1 style="margin:0;font-size:1.4rem;">🎭 <span class="em">You</span></h1>
+      <button class="btn secondary" id="roleTabBack" style="width:auto;margin:0;padding:10px 16px;">← Back</button>
+    </div>
+    <p class="sub">Your secret role and what you learned at the start. Tap the card to hide it.</p>
+    <div class="role-card" id="roleCardTab"></div>
+    <div id="seesWrapTab"></div>
   </section>
 
   <!-- ORDER (its own view) -->
@@ -435,6 +456,7 @@ $("roomBar").onclick = e => {
 // ---- tab bar: every player can open the Order and History views ----
 function renderNavTabs() {
   $("navTabs").innerHTML =
+    '<button class="nav-tab ' + (activeTab === "role" ? "on" : "") + '" data-tab="role">🎭 You</button>' +
     '<button class="nav-tab ' + (activeTab === "order" ? "on" : "") + '" data-tab="order">🔄 Order</button>' +
     '<button class="nav-tab ' + (activeTab === "history" ? "on" : "") + '" data-tab="history">📜 History</button>';
 }
@@ -442,6 +464,7 @@ $("navTabs").onclick = e => {
   const b = e.target.closest("[data-tab]"); if (!b) return;
   const t = b.getAttribute("data-tab");
   activeTab = (activeTab === t) ? null : t;   // toggle
+  if (activeTab === "role") tabRoleShown = true;   // reveal on open
   render();
 };
 $("histBack").onclick = () => { activeTab = null; render(); };
@@ -595,7 +618,7 @@ function onMessage(msg) {
   }
 }
 
-const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result","order","history"];
+const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result","myrole","order","history"];
 function showScreen(id) {
   SCREENS.forEach(s => $(s).classList.toggle("hidden", s !== id));
   $("chatPanel").classList.toggle("hidden", id === "home");
@@ -632,10 +655,11 @@ function render() {
   renderRoomBar();
   renderNavTabs();
   renderDropAlert();
-  // Order/History are their own tabs: keep showing (with fresh data) until Back.
+  // Role/Order/History are their own tabs: keep showing (fresh data) until Back.
   if (activeTab && state.phase !== "lobby") {
-    if (activeTab === "order") { renderOrder(); showScreen("order"); }
-    else { renderHistory(); showScreen("history"); }
+    if (activeTab === "role")       { renderRoleTab(); showScreen("myrole"); }
+    else if (activeTab === "order") { renderOrder(); showScreen("order"); }
+    else                            { renderHistory(); showScreen("history"); }
     renderChat(); return;
   }
   if (state.phase === "lobby")       renderLobby();
@@ -667,7 +691,11 @@ function renderLobby() {
 
   $("propRange").value = s.proposeSeconds; $("propVal").textContent = fmtClock(s.proposeSeconds);
   $("voteRange").value = s.voteSeconds;    $("voteVal").textContent = fmtClock(s.voteSeconds);
+  const cc = s.chipCount == null ? 1 : s.chipCount, cs = s.chipSeconds == null ? 180 : s.chipSeconds;
+  $("chipCountRange").value = cc; $("chipCountVal").textContent = cc === 0 ? "off" : cc;
+  $("chipLenRange").value = cs;   $("chipLenVal").textContent = fmtClock(cs);
   $("propRange").disabled = $("voteRange").disabled = !host;
+  $("chipCountRange").disabled = $("chipLenRange").disabled = !host;
 
   renderComp(host);
 
@@ -698,32 +726,47 @@ function renderLobby() {
   }
 }
 
-// ---- role reveal ----
-function renderRole() {
-  showScreen("role");
-  const card = $("roleCard");
-  if (myRole && roleShown) {
-    card.className = "role-card " + (myRole.team === "evil" ? "evil" : "good");
-    card.innerHTML = '<div class="team-lbl">' + (myRole.team === "evil" ? "Minion of Mordred" : "Servant of Arthur") + '</div>' +
+// ---- role card (shared by the reveal screen and the "You" tab) ----
+function seesHtml() {
+  if (myRole && myRole.sees && myRole.sees.length)
+    return '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel || "You see") + '</div>' +
+      '<div class="players">' + myRole.sees.map(x =>
+        '<div class="prow"><span>' + escapeHtml(x.name) + '</span><span class="knowtag" style="color:var(--danger)">' + escapeHtml(x.note) + '</span></div>').join("") +
+      '</div></div>';
+  return (myRole && myRole.seesLabel) ? '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel) + '</div></div>' : "";
+}
+function paintRoleCard(cardEl, seesEl, shown) {
+  if (myRole && shown) {
+    cardEl.className = "role-card " + (myRole.team === "evil" ? "evil" : "good");
+    cardEl.innerHTML = '<div class="team-lbl">' + (myRole.team === "evil" ? "Minion of Mordred" : "Servant of Arthur") + '</div>' +
       '<div class="role-name">' + escapeHtml(myRole.roleLabel) + '</div>' +
       '<div class="role-blurb">' + escapeHtml(myRole.blurb) + '</div>' +
       '<div class="tap-hint">tap to hide</div>';
-    $("seesWrap").innerHTML = (myRole.sees && myRole.sees.length)
-      ? '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel || "You see") + '</div>' +
-        '<div class="players">' + myRole.sees.map(x =>
-          '<div class="prow"><span>' + escapeHtml(x.name) + '</span><span class="knowtag" style="color:var(--danger)">' + escapeHtml(x.note) + '</span></div>').join("") +
-        '</div></div>'
-      : (myRole.seesLabel ? '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel) + '</div></div>' : "");
+    seesEl.innerHTML = seesHtml();
   } else {
-    card.className = "role-card";
-    card.innerHTML = myRole ? '<div class="lock-emoji">🔒</div><div class="tap-hint">Tap to view your role</div>'
-                            : '<div class="tap-hint">Dealing you in…</div>';
-    $("seesWrap").innerHTML = "";
+    cardEl.className = "role-card";
+    cardEl.innerHTML = myRole ? '<div class="lock-emoji">🔒</div><div class="tap-hint">Tap to view your role</div>'
+                              : '<div class="tap-hint">Dealing you in…</div>';
+    seesEl.innerHTML = "";
   }
+}
+
+// ---- role reveal (start-of-game phase) ----
+function renderRole() {
+  showScreen("role");
+  paintRoleCard($("roleCard"), $("seesWrap"), roleShown);
   $("beginBtn").classList.toggle("hidden", !amHost());
   $("roleWait").classList.toggle("hidden", amHost());
 }
 $("roleCard").onclick = () => { if (!myRole) return; roleShown = !roleShown; renderRole(); };
+
+// ---- "You" tab: re-check your role + night info any time ----
+let tabRoleShown = true;
+function renderRoleTab() {
+  paintRoleCard($("roleCardTab"), $("seesWrapTab"), tabRoleShown);
+}
+$("roleCardTab").onclick = () => { if (!myRole) return; tabRoleShown = !tabRoleShown; renderRoleTab(); };
+$("roleTabBack").onclick = () => { activeTab = null; render(); };
 
 // ---- quest tracker + rejects ----
 function trackerHtml() {
@@ -818,12 +861,14 @@ $("pauseVoteBtn").onclick = () => { if (amHost()) sendMsg({ type: "avPause" }); 
 
 // every player's "time chip": freeze the clock for a 3-minute break
 function renderChip(btn) {
+  if (state.timeout) { btn.classList.remove("hidden"); btn.disabled = true; btn.textContent = "⏱ Timeout running…"; return; }
   const me = (state.roster || []).find(p => p.id === myId());
   const myChips = me ? (me.chips || 0) : 0;
+  if (myChips < 1) { btn.classList.add("hidden"); return; }   // no chips → no button
+  const len = fmtClock((state.settings && state.settings.chipSeconds) || 180);
   btn.classList.remove("hidden");
-  if (state.timeout) { btn.disabled = true; btn.textContent = "⏱ Timeout running…"; return; }
-  btn.disabled = myChips < 1 || state.paused;
-  btn.textContent = myChips > 0 ? ("⏱ Call timeout (3 min) · " + myChips + " left") : "⏱ No timeouts left";
+  btn.disabled = state.paused;
+  btn.textContent = "⏱ Call timeout (" + len + ") · " + myChips + " left";
 }
 $("chipPropBtn").onclick = () => sendMsg({ type: "avChip" });
 $("chipVoteBtn").onclick = () => sendMsg({ type: "avChip" });
@@ -957,7 +1002,13 @@ function fmtClock(secs) { const m = Math.floor(secs / 60), s = secs % 60; return
 // ---- settings (host) ----
 $("propRange").oninput = e => { $("propVal").textContent = fmtClock(+e.target.value); if (amHost()) pushTimers(); };
 $("voteRange").oninput = e => { $("voteVal").textContent = fmtClock(+e.target.value); if (amHost()) pushTimers(); };
-function pushTimers() { sendMsg({ type: "settings", proposeSeconds: +$("propRange").value, voteSeconds: +$("voteRange").value }); }
+$("chipCountRange").oninput = e => { $("chipCountVal").textContent = (+e.target.value) === 0 ? "off" : e.target.value; if (amHost()) pushTimers(); };
+$("chipLenRange").oninput = e => { $("chipLenVal").textContent = fmtClock(+e.target.value); if (amHost()) pushTimers(); };
+function pushTimers() {
+  sendMsg({ type: "settings",
+    proposeSeconds: +$("propRange").value, voteSeconds: +$("voteRange").value,
+    chipCount: +$("chipCountRange").value, chipSeconds: +$("chipLenRange").value });
+}
 
 // When any seat's dropdown changes, send the whole line-up.
 $("compList").onchange = e => {
