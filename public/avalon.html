@@ -955,13 +955,16 @@ function renderResult() {
   b.className = "result-banner " + (r.winner === "good" ? "good" : "evil");
   b.textContent = r.winner === "good" ? "🛡️ Good wins!" : "🗡️ Evil wins!";
   let html = '<div class="reveal-line"><span class="k">Outcome</span><span class="v">' + escapeHtml(r.reason || "") + '</span></div>';
-  if (r.merlinName) html += '<div class="reveal-line"><span class="k">Merlin</span><span class="v">' + escapeHtml(r.merlinName) + '</span></div>';
-  if (r.assassinName) html += '<div class="reveal-line"><span class="k">Assassin</span><span class="v">' + escapeHtml(r.assassinName) + '</span></div>';
-  if (r.assassinatedName) html += '<div class="reveal-line"><span class="k">Assassin targeted</span><span class="v">' + escapeHtml(r.assassinatedName) + '</span></div>';
-  html += '<div style="height:10px"></div>';
-  html += (r.players || []).map(p =>
-    '<div class="rrow"><span class="rn">' + escapeHtml(p.name) + '</span>' +
-    '<span class="rr ' + (p.team === "evil" ? "evil" : "good") + '">' + escapeHtml(p.roleLabel) + '</span></div>').join("");
+  // Only the assassination reveals roles (the whole point of that ending).
+  if (r.assassin) {
+    html += '<div class="reveal-line"><span class="k">Assassin</span><span class="v">' + escapeHtml(r.assassin.name || "?") + '</span></div>';
+    html += '<div class="reveal-line"><span class="k">Shot at</span><span class="v">' + escapeHtml(r.assassin.target || "?") + '</span></div>';
+    if (r.assassin.merlin) html += '<div class="reveal-line"><span class="k">Merlin was</span><span class="v">' + escapeHtml(r.assassin.merlin) + '</span></div>';
+  }
+  // Quest outcomes (not roles).
+  const qr = (r.questResults || []).map((q, i) => q ? ('Q' + (i + 1) + ' ' + (q.success ? "✅" : "❌")) : null).filter(Boolean);
+  if (qr.length) html += '<div class="reveal-line"><span class="k">Quests</span><span class="v">' + qr.join("  ") + '</span></div>';
+  html += '<p class="hint" style="text-align:center;margin-top:12px;">Everyone else\'s role stays secret. 🤫</p>';
   $("resultDetail").innerHTML = html;
   $("resultBtns").classList.toggle("hidden", !amHost());
   $("resultWait").classList.toggle("hidden", amHost());

@@ -618,20 +618,15 @@ module.exports = (api) => {
   function endGame(room, winner, reason, assassinatedId) {
     const g = room.g;
     clearTimers(room);
-    const players = g.order.map(id => {
-      const p = room.players.get(id);
-      const role = p?.role || "servant";
-      return { id, name: nameOf(room, id), role, roleLabel: ROLE_META[role].label, team: ROLE_META[role].team };
-    });
-    const merlin = g.order.find(id => room.players.get(id)?.role === "merlin");
-    g.result = {
-      winner, reason,
-      players,
-      questResults: g.questResults,
-      merlinName: merlin ? nameOf(room, merlin) : null,
-      assassinName: g.assassinId ? nameOf(room, g.assassinId) : null,
-      assassinatedName: assassinatedId ? nameOf(room, assassinatedId) : null,
-    };
+    // Roles are NOT revealed at the end — only the outcome. The one exception is
+    // the assassination: revealing who was shot and who Merlin actually was is
+    // the whole payoff of that ending.
+    const result = { winner, reason, questResults: g.questResults };
+    if (assassinatedId) {
+      const merlin = g.order.find(id => room.players.get(id)?.role === "merlin");
+      result.assassin = { name: nameOf(room, g.assassinId), target: nameOf(room, assassinatedId), merlin: merlin ? nameOf(room, merlin) : null };
+    }
+    g.result = result;
     room.phase = "result";
     broadcastState(room);
   }
