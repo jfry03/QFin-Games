@@ -1,11 +1,12 @@
 {
-  "name": "imposter",
-  "version": "1.0.0",
-  "description": "Online multiplayer Imposter word game — join a room from any device.",
+  "name": "qfin-games",
+  "version": "2.0.0",
+  "description": "QFin Games — online multiplayer party games (Imposter, Avalon). Join a room from any device.",
   "main": "server.js",
   "type": "commonjs",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "test": "node tests/backend.test.js"
   },
   "dependencies": {
     "ws": "^8.18.0"

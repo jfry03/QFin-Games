@@ -364,7 +364,7 @@
     </div>
   </div>
 
-  <div class="footer-note"><a href="teams.html">Team mode →</a></div>
+  <div class="footer-note"><a href="/">← All games</a> &nbsp;·&nbsp; <a href="teams.html">Team mode →</a></div>
   <div class="status-dot" id="statusDot"></div>
 </div>
 
@@ -427,7 +427,11 @@ function onMessage(msg) {
       session.code = msg.code;
       session.playerId = msg.playerId;
       session.name = msg.you.name;
+      session.game = msg.game;
       saveSession();
+      // Joined a room for a different game (e.g. typed an Avalon code) — hand
+      // off to that game's page, which auto-rejoins from the saved session.
+      if (msg.game && msg.game !== "imposter") { location.href = "/" + msg.game; return; }
       break;
     case "state":
       state = msg;
@@ -765,7 +769,7 @@ $("createBtn").onclick = () => {
   const name = $("nameInput").value.trim();
   if (!name) return banner("Enter your name first.");
   session.name = name;
-  sendMsg({ type: "create", name });
+  sendMsg({ type: "create", name, game: "imposter" });
 };
 $("joinBtn").onclick = () => {
   const name = $("nameInput").value.trim();

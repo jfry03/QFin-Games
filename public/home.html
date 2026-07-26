@@ -1,0 +1,77 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QFin Games</title>
+<style>
+  :root {
+    --bg: #0f1020; --bg2: #1a1b35; --card: #232447;
+    --accent: #6c5ce7; --accent2: #a29bfe;
+    --gold: #f6c453; --crimson: #ff6b6b; --good: #1dd1a1;
+    --text: #f5f6fa; --muted: #9b9cc4; --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text); min-height: 100%;
+    display: flex; align-items: stretch; justify-content: center;
+  }
+  #app { width: 100%; max-width: 480px; padding: 26px; display: flex; flex-direction: column; min-height: 100vh; }
+  .brand { margin-top: 12px; }
+  h1 { font-size: 2rem; margin: 6px 0 2px; letter-spacing: -0.5px; }
+  h1 .em { color: var(--accent2); }
+  .sub { color: var(--muted); margin: 0 0 26px; font-size: 0.98rem; }
+  .games { display: flex; flex-direction: column; gap: 16px; }
+  a.game {
+    display: block; text-decoration: none; color: var(--text);
+    background: var(--card); border-radius: 22px; padding: 22px;
+    border: 2px solid transparent; transition: transform .08s, border-color .15s;
+  }
+  a.game:active { transform: scale(0.985); }
+  a.game.imposter:hover { border-color: var(--accent2); }
+  a.game.avalon:hover { border-color: var(--gold); }
+  .game .top { display: flex; align-items: center; gap: 14px; }
+  .game .emoji { font-size: 2.4rem; line-height: 1; }
+  .game .name { font-size: 1.5rem; font-weight: 800; letter-spacing: -0.5px; }
+  .game.avalon .name { color: var(--gold); }
+  .game.imposter .name { color: var(--accent2); }
+  .game .desc { color: var(--muted); margin: 12px 0 0; font-size: 0.92rem; line-height: 1.45; }
+  .game .meta { margin-top: 12px; font-size: 0.8rem; color: var(--muted); display: flex; gap: 14px; }
+  .game .meta b { color: var(--text); font-weight: 700; }
+  .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: auto; padding-top: 24px; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div class="brand">
+    <h1>QFin <span class="em">Games</span></h1>
+    <p class="sub">Pick a game. Everyone joins from their own phone with a room code.</p>
+  </div>
+
+  <div class="games">
+    <a class="game imposter" href="/imposter">
+      <div class="top">
+        <div class="emoji">🕵️</div>
+        <div class="name">Imposter</div>
+      </div>
+      <p class="desc">The crew share a secret word; the imposter gets a similar one. Give one-word clues, then vote out the faker — or let them guess the word and steal it.</p>
+      <div class="meta"><span><b>3+</b> players</span><span>Word · social deduction</span></div>
+    </a>
+
+    <a class="game avalon" href="/avalon">
+      <div class="top">
+        <div class="emoji">⚔️</div>
+        <div class="name">Avalon</div>
+      </div>
+      <p class="desc">Loyal servants vs minions of Mordred. Nominate quest teams, vote to send them, and sabotage in secret. Good must pass three quests — then survive the Assassin's guess at Merlin.</p>
+      <div class="meta"><span><b>5–10</b> players</span><span>Hidden roles · teams</span></div>
+    </a>
+  </div>
+
+  <div class="footer-note">QFin UWA · built for game nights</div>
+</div>
+</body>
+</html>

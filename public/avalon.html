@@ -1,0 +1,702 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Avalon — Online</title>
+<style>
+  :root {
+    --bg: #0f1020; --bg2: #1a1b35; --card: #232447; --card2: #2c2d55;
+    --accent: #6c5ce7; --accent2: #a29bfe;
+    --gold: #f6c453; --danger: #ff6b6b; --good: #1dd1a1;
+    --text: #f5f6fa; --muted: #9b9cc4; --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text); min-height: 100%; display: flex; align-items: stretch; justify-content: center;
+  }
+  #app { width: 100%; max-width: 480px; padding: 22px; display: flex; flex-direction: column; min-height: 100vh; }
+  h1 { font-size: 1.7rem; margin: 8px 0 2px; letter-spacing: -0.5px; }
+  h1 .em { color: var(--gold); }
+  .sub { color: var(--muted); margin: 0 0 22px; font-size: 0.95rem; }
+  .screen { flex: 1; display: flex; flex-direction: column; }
+  .hidden { display: none !important; }
+
+  .field { margin-bottom: 20px; }
+  .field label { display: block; font-weight: 600; margin-bottom: 10px; }
+  .field .hint { color: var(--muted); font-size: 0.82rem; font-weight: 400; margin-top: 6px; }
+
+  input.text {
+    width: 100%; padding: 16px; border-radius: var(--radius); border: 1.5px solid var(--card);
+    background: var(--card); color: var(--text); font-size: 1.1rem; outline: none;
+  }
+  input.text:focus { border-color: var(--accent2); }
+  input.code { text-transform: uppercase; letter-spacing: 8px; text-align: center; font-weight: 800; font-size: 1.6rem; }
+
+  .val-pill { float: right; font-weight: 700; color: var(--gold); background: var(--card); padding: 2px 12px; border-radius: 999px; font-size: 0.85rem; }
+  .range { -webkit-appearance: none; appearance: none; width: 100%; height: 8px; border-radius: 999px; background: var(--card); outline: none; margin: 6px 0; }
+  .range::-webkit-slider-thumb { -webkit-appearance: none; appearance: none; width: 28px; height: 28px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff; }
+  .range::-moz-range-thumb { width: 28px; height: 28px; border-radius: 50%; background: var(--accent); cursor: pointer; border: 3px solid #fff; }
+  .range:disabled::-webkit-slider-thumb { background: var(--muted); }
+
+  .btn { display: block; width: 100%; padding: 18px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 1.1rem; font-weight: 700; cursor: pointer; margin-top: 14px; }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; }
+  .btn.secondary { background: var(--card); color: var(--text); }
+  .btn.ghost { background: transparent; color: var(--muted); font-size: 0.95rem; }
+  .btn.gold { background: var(--gold); color: #241c00; }
+  .btn.good { background: var(--good); color: #06251b; }
+  .btn.danger { background: var(--danger); color: #2a0808; }
+  .push-bottom { margin-top: auto; }
+  .row2 { display: flex; gap: 12px; }
+  .row2 .btn { flex: 1; }
+
+  .code-badge { background: var(--card); border-radius: var(--radius); padding: 18px; text-align: center; margin-bottom: 18px; }
+  .code-badge .lbl { color: var(--muted); font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; }
+  .code-badge .code { font-size: 2.8rem; font-weight: 800; letter-spacing: 10px; margin-top: 4px; }
+
+  .players { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
+  .prow { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 14px 16px; border-radius: 14px; }
+  .prow .tag { color: var(--gold); font-size: 0.75rem; font-weight: 700; }
+  .prow.me { border: 1.5px solid var(--accent2); }
+  .prow.leader { border: 1.5px solid var(--gold); }
+  .prow.sel { border: 1.5px solid var(--good); background: rgba(29,209,161,0.14); }
+  .prow.picked { border: 1.5px solid var(--gold); background: rgba(246,196,83,0.12); }
+  .prow.clickable { cursor: pointer; }
+  .prow .crown { color: var(--gold); font-size: 0.72rem; font-weight: 700; letter-spacing: 1px; }
+  .prow .knowtag { font-size: 0.72rem; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
+
+  .chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .chip { background: var(--card2); border-radius: 999px; padding: 4px 11px; font-size: 0.8rem; font-weight: 600; }
+  .chip.good { color: var(--good); } .chip.evil { color: var(--danger); }
+
+  /* quest tracker */
+  .tracker { display: flex; gap: 8px; margin: 4px 0 18px; }
+  .quest-pip { flex: 1; text-align: center; background: var(--card); border-radius: 12px; padding: 10px 4px; border: 2px solid transparent; }
+  .quest-pip .qn { font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; }
+  .quest-pip .qsize { font-size: 1.15rem; font-weight: 800; margin-top: 2px; }
+  .quest-pip .qtwo { font-size: 0.6rem; color: var(--gold); }
+  .quest-pip.cur { border-color: var(--gold); }
+  .quest-pip.pass { background: rgba(29,209,161,0.2); color: var(--good); }
+  .quest-pip.fail { background: rgba(255,107,107,0.2); color: var(--danger); }
+  .rejects { display: flex; align-items: center; gap: 6px; justify-content: center; color: var(--muted); font-size: 0.82rem; margin-bottom: 14px; }
+  .rejects .dot { width: 10px; height: 10px; border-radius: 50%; background: var(--card2); }
+  .rejects .dot.on { background: var(--danger); }
+
+  /* role card */
+  .role-card { width: 100%; background: var(--card); border-radius: 26px; padding: 32px 22px; display: flex; flex-direction: column; align-items: center; gap: 12px; cursor: pointer; user-select: none; text-align: center; min-height: 220px; justify-content: center; border: 2px solid transparent; }
+  .role-card.good { border-color: var(--good); }
+  .role-card.evil { border-color: var(--danger); }
+  .role-card .lock-emoji { font-size: 3rem; }
+  .role-card .tap-hint { color: var(--muted); }
+  .role-card .team-lbl { font-size: 0.8rem; letter-spacing: 2px; text-transform: uppercase; }
+  .role-card.good .team-lbl { color: var(--good); }
+  .role-card.evil .team-lbl { color: var(--danger); }
+  .role-card .role-name { font-size: 2rem; font-weight: 800; }
+  .role-card .role-blurb { color: var(--muted); font-size: 0.9rem; line-height: 1.45; max-width: 340px; }
+  .sees-box { background: var(--card); border-radius: 16px; padding: 16px; margin-top: 16px; }
+  .sees-box .sees-lbl { color: var(--gold); font-size: 0.78rem; letter-spacing: 1px; text-transform: uppercase; margin-bottom: 10px; }
+
+  .banner-phase { text-align: center; font-weight: 700; font-size: 1.05rem; margin: 6px 0 10px; }
+  .banner-phase.mine { color: var(--good); }
+  .clock { text-align: center; font-size: 2.2rem; font-weight: 800; letter-spacing: 2px; margin: 2px 0 14px; }
+  .clock.warn { color: var(--danger); }
+
+  .team-names { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; margin: 6px 0 16px; }
+  .team-names .tn { background: var(--card2); border-radius: 999px; padding: 8px 14px; font-weight: 700; }
+
+  .result-banner { text-align: center; padding: 22px; border-radius: var(--radius); margin-bottom: 16px; font-size: 1.35rem; font-weight: 800; }
+  .result-banner.good { background: rgba(29,209,161,0.15); color: var(--good); }
+  .result-banner.evil { background: rgba(255,107,107,0.15); color: var(--danger); }
+  .reveal-line { background: var(--card); border-radius: 12px; padding: 12px 15px; margin-bottom: 8px; display: flex; justify-content: space-between; gap: 12px; }
+  .reveal-line .k { color: var(--muted); } .reveal-line .v { font-weight: 700; text-align: right; }
+  .rrow { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 12px 15px; border-radius: 12px; margin-bottom: 8px; }
+  .rrow .rn { font-weight: 700; }
+  .rrow .rr { font-size: 0.85rem; font-weight: 700; }
+  .rrow .rr.good { color: var(--good); } .rrow .rr.evil { color: var(--danger); }
+
+  .chat { border-top: 1px solid var(--card); margin-top: 16px; padding-top: 12px; }
+  .chat-log { display: flex; flex-direction: column; gap: 6px; max-height: 150px; overflow-y: auto; margin-bottom: 8px; font-size: 0.9rem; }
+  .chat-msg .cn { color: var(--gold); font-weight: 700; margin-right: 6px; }
+  .chat-row { display: flex; gap: 8px; }
+  .chat-row input { flex: 1; padding: 12px; border-radius: 12px; border: 1.5px solid var(--card); background: var(--card); color: var(--text); outline: none; font-size: 0.95rem; }
+  .chat-row button { flex: none; padding: 0 18px; border: none; border-radius: 12px; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+
+  .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: 14px; }
+  .footer-note a { color: var(--accent2); }
+  .banner { background: var(--danger); color: #fff; padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; margin-bottom: 14px; text-align: center; }
+  .status-dot { font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: 10px; }
+  .toggle-list { display: flex; flex-direction: column; gap: 8px; }
+  .toggle { display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 12px; padding: 12px 14px; }
+  .toggle .tinfo b { font-weight: 700; } .toggle .tinfo span { display: block; color: var(--muted); font-size: 0.78rem; }
+  .switch { position: relative; width: 48px; height: 28px; flex: none; }
+  .switch input { display: none; }
+  .switch .slider { position: absolute; inset: 0; background: var(--card2); border-radius: 999px; transition: .15s; }
+  .switch .slider:before { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
+  .switch input:checked + .slider { background: var(--good); }
+  .switch input:checked + .slider:before { transform: translateX(20px); }
+  .switch input:disabled + .slider { opacity: 0.5; }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="banner" class="banner hidden"></div>
+
+  <!-- HOME -->
+  <section id="home" class="screen">
+    <h1>The Resistance: <span class="em">Avalon</span></h1>
+    <p class="sub">Online hidden-role deduction. Everyone joins from their own phone.</p>
+    <div class="field">
+      <label>Your name</label>
+      <input class="text" id="nameInput" maxlength="20" placeholder="e.g. Alex" autocomplete="off">
+    </div>
+    <button class="btn gold" id="createBtn">Create a room</button>
+    <div class="field" style="margin-top:28px;">
+      <label>Join a room</label>
+      <input class="text code" id="codeInput" maxlength="4" placeholder="CODE" autocomplete="off">
+    </div>
+    <button class="btn secondary" id="joinBtn">Join</button>
+    <div class="footer-note push-bottom"><a href="/">← All games</a></div>
+  </section>
+
+  <!-- LOBBY -->
+  <section id="lobby" class="screen hidden">
+    <div class="code-badge">
+      <div class="lbl">Room code</div>
+      <div class="code" id="lobbyCode">····</div>
+    </div>
+
+    <div class="field">
+      <label>Nomination time limit <span class="val-pill" id="propVal">1:30</span></label>
+      <input type="range" class="range" id="propRange" min="15" max="300" step="15" value="90">
+      <div class="hint">How long the leader has to nominate a quest team before it auto-fills.</div>
+    </div>
+    <div class="field">
+      <label>Voting window <span class="val-pill" id="voteVal">1:00</span></label>
+      <input type="range" class="range" id="voteRange" min="15" max="240" step="15" value="60">
+      <div class="hint">Time to approve/reject once a team is nominated. Missing votes count as reject.</div>
+    </div>
+
+    <div class="field">
+      <label>Optional roles</label>
+      <div class="toggle-list" id="roleToggles"></div>
+      <div class="hint">Merlin &amp; the Assassin are always in. Extra evil roles beyond the evil count are dropped.</div>
+    </div>
+
+    <div class="field" id="previewField">
+      <label>Roles in play (<span id="pvCount">0</span> players)</label>
+      <div class="chips" id="rolePreview"></div>
+    </div>
+
+    <label style="font-weight:600;margin-bottom:10px;display:block;">Players (<span id="pCount">0</span>)</label>
+    <div class="players" id="playerList"></div>
+    <button class="btn gold push-bottom" id="startBtn">Deal roles</button>
+    <p class="hint" id="waitHint" style="text-align:center;">Waiting for the host to start…</p>
+    <button class="btn ghost" id="leaveBtn">Leave room</button>
+  </section>
+
+  <!-- ROLE REVEAL -->
+  <section id="role" class="screen hidden">
+    <h1>Your <span class="em">role</span></h1>
+    <p class="sub">Keep it secret. Tap to reveal, tap again to hide.</p>
+    <div class="role-card" id="roleCard">
+      <div class="lock-emoji">🔒</div>
+      <div class="tap-hint">Tap to view your role</div>
+    </div>
+    <div id="seesWrap"></div>
+    <button class="btn gold push-bottom hidden" id="beginBtn">Begin first quest →</button>
+    <p class="hint" id="roleWait" style="text-align:center;">Everyone is reading their role…</p>
+  </section>
+
+  <!-- PROPOSAL -->
+  <section id="proposal" class="screen hidden">
+    <div id="trackerP"></div>
+    <div id="rejectsP"></div>
+    <div class="banner-phase" id="propBanner"></div>
+    <div class="clock" id="propClock"></div>
+    <div class="players" id="proposeList"></div>
+    <button class="btn gold hidden" id="proposeBtn">Send team to vote</button>
+    <button class="btn ghost hidden" id="forceProp">Skip nomination (host)</button>
+  </section>
+
+  <!-- TEAM VOTE -->
+  <section id="teamvote" class="screen hidden">
+    <div id="trackerV"></div>
+    <h1 style="text-align:center;font-size:1.3rem;">Approve this team?</h1>
+    <div class="team-names" id="voteTeam"></div>
+    <div class="clock" id="voteClock"></div>
+    <div class="row2">
+      <button class="btn good" id="approveBtn">👍 Approve</button>
+      <button class="btn danger" id="rejectBtn">👎 Reject</button>
+    </div>
+    <p class="hint" id="voteProgress" style="text-align:center;margin-top:14px;"></p>
+    <button class="btn ghost hidden" id="forceVote">Tally now (host)</button>
+  </section>
+
+  <!-- VOTE REVEAL -->
+  <section id="votereveal" class="screen hidden">
+    <div class="result-banner" id="vrBanner"></div>
+    <div class="players" id="vrList"></div>
+    <p class="hint" style="text-align:center;">Next up in a moment…</p>
+  </section>
+
+  <!-- QUEST -->
+  <section id="quest" class="screen hidden">
+    <div id="trackerQ"></div>
+    <h1 style="text-align:center;font-size:1.3rem;" id="questTitle">The quest</h1>
+    <div class="team-names" id="questTeam"></div>
+    <div id="questAction"></div>
+    <p class="hint" id="questProgress" style="text-align:center;"></p>
+    <button class="btn ghost hidden" id="forceQuest">Force resolve (host)</button>
+  </section>
+
+  <!-- QUEST REVEAL -->
+  <section id="questreveal" class="screen hidden">
+    <div class="result-banner" id="qrBanner"></div>
+    <div id="qrDetail"></div>
+    <p class="hint" style="text-align:center;">Continuing…</p>
+  </section>
+
+  <!-- ASSASSINATE -->
+  <section id="assassinate" class="screen hidden">
+    <h1 style="text-align:center;">🗡️ The <span class="em">Assassin</span> strikes</h1>
+    <div id="assassinBody"></div>
+  </section>
+
+  <!-- RESULT -->
+  <section id="result" class="screen hidden">
+    <div class="result-banner" id="resultBanner"></div>
+    <div id="resultDetail"></div>
+    <div class="row2" id="resultBtns">
+      <button class="btn gold" id="playAgainBtn">Play again</button>
+      <button class="btn secondary" id="toLobbyBtn">Lobby</button>
+    </div>
+    <p class="hint" id="resultWait" style="text-align:center;">Waiting for the host…</p>
+  </section>
+
+  <!-- CHAT -->
+  <div class="chat hidden" id="chatPanel">
+    <div class="chat-log" id="chatLog"></div>
+    <div class="chat-row">
+      <input id="chatInput" maxlength="240" placeholder="Message the room…" autocomplete="off">
+      <button id="chatSend">Send</button>
+    </div>
+  </div>
+
+  <div class="footer-note" id="leaveFoot"><a href="#" id="leaveLink">Leave room</a></div>
+  <div class="status-dot" id="statusDot"></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const GAME = "avalon";
+
+// Team sizes / two-fails rule mirrored from the server so the tracker can label
+// quests before/while playing.
+const QUEST_TEAMS = { 5:[2,3,2,3,3], 6:[2,3,4,3,4], 7:[2,3,3,4,4], 8:[3,4,4,5,5], 9:[3,4,4,5,5], 10:[3,4,4,5,5] };
+const OPT_ROLES = [
+  { key: "percival", name: "Percival", desc: "Sees Merlin (and Morgana as a decoy)", team: "good" },
+  { key: "morgana",  name: "Morgana",  desc: "Appears to Percival as Merlin", team: "evil" },
+  { key: "mordred",  name: "Mordred",  desc: "Hidden from Merlin", team: "evil" },
+  { key: "oberon",   name: "Oberon",   desc: "Evil, but works alone", team: "evil" },
+];
+
+// Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
+const KEY = "qfin_session";
+let session = {};
+try { session = JSON.parse(sessionStorage.getItem(KEY) || "{}"); } catch {}
+function saveSession() { sessionStorage.setItem(KEY, JSON.stringify(session)); }
+function clearSession() { session = {}; sessionStorage.removeItem(KEY); }
+
+let state = null, ws = null, reconnectTimer = null;
+let myRole = null;          // private { role, roleLabel, team, blurb, seesLabel, sees[] }
+let roleShown = false;
+let selected = new Set();   // leader's team pick
+let myVote = null;          // my approve/reject this proposal
+let myCard = null;          // my quest card this quest
+let assassinPick = null;
+let lastTeamKey = "", lastQuestKey = "";
+
+function wsUrl() { return (location.protocol === "https:" ? "wss" : "ws") + "://" + location.host + "/ws"; }
+function connect() {
+  ws = new WebSocket(wsUrl());
+  ws.onopen = () => {
+    $("statusDot").textContent = "";
+    if (session.code && session.playerId) sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name });
+  };
+  ws.onmessage = e => onMessage(JSON.parse(e.data));
+  ws.onclose = () => { $("statusDot").textContent = "Reconnecting…"; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 1500); };
+  ws.onerror = () => ws.close();
+}
+function sendMsg(m) { if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(m)); }
+
+function banner(text) {
+  const b = $("banner");
+  if (!text) { b.classList.add("hidden"); return; }
+  b.textContent = text; b.classList.remove("hidden");
+  setTimeout(() => b.classList.add("hidden"), 4000);
+}
+
+function onMessage(msg) {
+  switch (msg.type) {
+    case "joined":
+      session.code = msg.code; session.playerId = msg.playerId; session.name = msg.you.name; session.game = msg.game;
+      saveSession();
+      if (msg.game && msg.game !== GAME) { location.href = "/" + msg.game; return; }
+      break;
+    case "state":
+      state = msg; render(); break;
+    case "role":
+      myRole = msg; roleShown = false;
+      if (state && state.phase === "roleReveal") renderRole();
+      break;
+    case "error":
+      banner(msg.message);
+      if (msg.code === "no_room" || msg.code === "gone") { clearSession(); showScreen("home"); }
+      break;
+  }
+}
+
+const SCREENS = ["home","lobby","role","proposal","teamvote","votereveal","quest","questreveal","assassinate","result"];
+function showScreen(id) {
+  SCREENS.forEach(s => $(s).classList.toggle("hidden", s !== id));
+  $("chatPanel").classList.toggle("hidden", id === "home");
+  $("leaveFoot").classList.toggle("hidden", id === "home");
+}
+function amHost() { return state && state.hostId === session.playerId; }
+function myId() { return session.playerId; }
+
+function nameMap() {
+  const m = {};
+  (state.players || []).forEach(p => { m[p.id] = p.name; });
+  return m;
+}
+
+function render() {
+  if (!state) return;
+  const phaseScreen = { lobby:"lobby", roleReveal:"role", proposal:"proposal", teamVote:"teamvote",
+    voteReveal:"votereveal", quest:"quest", questReveal:"questreveal", assassinate:"assassinate", result:"result" };
+  // reset transient pick state when the proposal/quest changes
+  const teamKey = state.phase + ":" + (state.team || []).join(",") + ":" + state.quest;
+  if (teamKey !== lastTeamKey) { if (state.phase === "proposal") { selected = new Set(); } myVote = null; lastTeamKey = teamKey; }
+  const questKey = "q" + state.quest + ":" + state.phase;
+  if (state.phase === "quest" && questKey !== lastQuestKey) { myCard = null; lastQuestKey = questKey; }
+
+  if (state.phase === "lobby")       renderLobby();
+  else if (state.phase === "roleReveal") renderRole();
+  else if (state.phase === "proposal")   renderProposal();
+  else if (state.phase === "teamVote")   renderVote();
+  else if (state.phase === "voteReveal") renderVoteReveal();
+  else if (state.phase === "quest")      renderQuest();
+  else if (state.phase === "questReveal") renderQuestReveal();
+  else if (state.phase === "assassinate") renderAssassinate();
+  else if (state.phase === "result")     renderResult();
+  renderChat();
+}
+
+function renderChat() {
+  const log = $("chatLog");
+  const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+  log.innerHTML = (state.chat || []).map(m =>
+    '<div class="chat-msg"><span class="cn">' + escapeHtml(m.name) + '</span>' + escapeHtml(m.text) + '</div>').join("");
+  if (atBottom) log.scrollTop = log.scrollHeight;
+}
+
+// ---- lobby ----
+function renderLobby() {
+  showScreen("lobby");
+  $("lobbyCode").textContent = state.code;
+  const host = amHost();
+  const s = state.settings || { proposeSeconds: 90, voteSeconds: 60, roles: {} };
+
+  $("propRange").value = s.proposeSeconds; $("propVal").textContent = fmtClock(s.proposeSeconds);
+  $("voteRange").value = s.voteSeconds;    $("voteVal").textContent = fmtClock(s.voteSeconds);
+  $("propRange").disabled = $("voteRange").disabled = !host;
+
+  $("roleToggles").innerHTML = OPT_ROLES.map(r =>
+    '<div class="toggle"><div class="tinfo"><b>' + r.name + '</b><span>' + r.desc + '</span></div>' +
+    '<label class="switch"><input type="checkbox" data-role="' + r.key + '"' +
+    (s.roles[r.key] ? " checked" : "") + (host ? "" : " disabled") + '><span class="slider"></span></label></div>').join("");
+
+  $("pvCount").textContent = state.playerCount || (state.players || []).length;
+  $("rolePreview").innerHTML = (state.rolePreview || [])
+    .map(lbl => '<span class="chip ' + (/(Assassin|Morgana|Mordred|Oberon|Minion)/.test(lbl) ? "evil" : "good") + '">' + escapeHtml(lbl) + '</span>').join("")
+    || '<span class="hint">Need 5–10 players.</span>';
+
+  $("pCount").textContent = state.players.length;
+  $("playerList").innerHTML = state.players.map(p =>
+    '<div class="prow ' + (p.id === myId() ? "me" : "") + '"><span>' + escapeHtml(p.name) +
+    (p.id === myId() ? " (you)" : "") + '</span>' + (p.isHost ? '<span class="tag">HOST</span>' : "") + '</div>').join("");
+
+  $("startBtn").classList.toggle("hidden", !host);
+  $("waitHint").classList.toggle("hidden", host);
+  if (host) {
+    const ok = state.canStart;
+    $("startBtn").disabled = !ok;
+    $("startBtn").textContent = ok ? "Deal roles" : "Need 5–10 players (" + (state.playerCount || 0) + ")";
+  }
+}
+
+// ---- role reveal ----
+function renderRole() {
+  showScreen("role");
+  const card = $("roleCard");
+  if (myRole && roleShown) {
+    card.className = "role-card " + (myRole.team === "evil" ? "evil" : "good");
+    card.innerHTML = '<div class="team-lbl">' + (myRole.team === "evil" ? "Minion of Mordred" : "Servant of Arthur") + '</div>' +
+      '<div class="role-name">' + escapeHtml(myRole.roleLabel) + '</div>' +
+      '<div class="role-blurb">' + escapeHtml(myRole.blurb) + '</div>' +
+      '<div class="tap-hint">tap to hide</div>';
+    $("seesWrap").innerHTML = (myRole.sees && myRole.sees.length)
+      ? '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel || "You see") + '</div>' +
+        '<div class="players">' + myRole.sees.map(x =>
+          '<div class="prow"><span>' + escapeHtml(x.name) + '</span><span class="knowtag" style="color:var(--danger)">' + escapeHtml(x.note) + '</span></div>').join("") +
+        '</div></div>'
+      : (myRole.seesLabel ? '<div class="sees-box"><div class="sees-lbl">' + escapeHtml(myRole.seesLabel) + '</div></div>' : "");
+  } else {
+    card.className = "role-card";
+    card.innerHTML = myRole ? '<div class="lock-emoji">🔒</div><div class="tap-hint">Tap to view your role</div>'
+                            : '<div class="tap-hint">Dealing you in…</div>';
+    $("seesWrap").innerHTML = "";
+  }
+  $("beginBtn").classList.toggle("hidden", !amHost());
+  $("roleWait").classList.toggle("hidden", amHost());
+}
+$("roleCard").onclick = () => { if (!myRole) return; roleShown = !roleShown; renderRole(); };
+
+// ---- quest tracker + rejects ----
+function trackerHtml() {
+  const n = (state.order || []).length;
+  const sizes = QUEST_TEAMS[n] || [2,3,3,4,4];
+  const res = state.questResults || [];
+  return '<div class="tracker">' + sizes.map((sz, i) => {
+    let cls = "quest-pip";
+    if (res[i]) cls += res[i].success ? " pass" : " fail";
+    else if (i === state.quest) cls += " cur";
+    const two = (i === 3 && n >= 7) ? '<div class="qtwo">2 fails</div>' : '';
+    const mark = res[i] ? (res[i].success ? "✓" : "✗") : sz;
+    return '<div class="' + cls + '"><div class="qn">Q' + (i+1) + '</div><div class="qsize">' + mark + '</div>' + two + '</div>';
+  }).join("") + '</div>';
+}
+function rejectsHtml() {
+  const rc = state.rejectCount || 0;
+  return '<div class="rejects">Rejected nominations: ' +
+    [0,1,2,3,4].map(i => '<span class="dot ' + (i < rc ? "on" : "") + '"></span>').join("") +
+    ' <span>' + rc + '/5</span></div>';
+}
+
+// ---- proposal ----
+function renderProposal() {
+  showScreen("proposal");
+  $("trackerP").innerHTML = trackerHtml();
+  $("rejectsP").innerHTML = rejectsHtml();
+  const names = nameMap();
+  const iLead = state.leaderId === myId();
+  const size = state.teamSize;
+  const bn = $("propBanner");
+  bn.classList.toggle("mine", iLead);
+  bn.textContent = iLead
+    ? "You lead. Pick " + size + " for quest " + (state.quest + 1)
+    : (names[state.leaderId] || "The leader") + " is choosing " + size + " for quest " + (state.quest + 1);
+
+  $("proposeList").innerHTML = state.players.map(p => {
+    const sel = selected.has(p.id);
+    const cls = "prow" + (p.id === state.leaderId ? " leader" : "") + (sel ? " sel" : "") + (iLead ? " clickable" : "");
+    return '<div class="' + cls + '" data-pick="' + p.id + '"><span>' + escapeHtml(p.name) +
+      (p.id === myId() ? " (you)" : "") + '</span>' +
+      (p.id === state.leaderId ? '<span class="crown">👑 LEADER</span>' : (sel ? '<span class="crown">✓ on team</span>' : "")) + '</div>';
+  }).join("");
+
+  const btn = $("proposeBtn");
+  btn.classList.toggle("hidden", !iLead);
+  btn.disabled = selected.size !== size;
+  btn.textContent = "Send team (" + selected.size + "/" + size + ")";
+  $("forceProp").classList.toggle("hidden", !(amHost() && !iLead));
+  startClock($("propClock"), state.deadline);
+}
+$("proposeList").onclick = e => {
+  if (state.leaderId !== myId()) return;
+  const row = e.target.closest("[data-pick]"); if (!row) return;
+  const id = row.getAttribute("data-pick");
+  if (selected.has(id)) selected.delete(id);
+  else { if (selected.size >= state.teamSize) return; selected.add(id); }
+  renderProposal();
+};
+$("proposeBtn").onclick = () => { if (selected.size === state.teamSize) sendMsg({ type: "avPropose", members: [...selected] }); };
+$("forceProp").onclick = () => sendMsg({ type: "avForce" });
+
+// ---- team vote ----
+function renderVote() {
+  showScreen("teamvote");
+  $("trackerV").innerHTML = trackerHtml();
+  const names = nameMap();
+  $("voteTeam").innerHTML = (state.team || []).map(id => '<span class="tn">' + escapeHtml(names[id] || "?") + '</span>').join("");
+  const voted = (state.voted || []).length, need = state.voteNeeded || state.players.length;
+  $("voteProgress").textContent = voted + " / " + need + " voted" +
+    (myVote != null ? "  ·  you voted " + (myVote ? "Approve 👍" : "Reject 👎") : "");
+  $("approveBtn").style.opacity = myVote === true ? "1" : (myVote === false ? "0.5" : "1");
+  $("rejectBtn").style.opacity = myVote === false ? "1" : (myVote === true ? "0.5" : "1");
+  $("forceVote").classList.toggle("hidden", !amHost());
+  startClock($("voteClock"), state.deadline);
+}
+$("approveBtn").onclick = () => { myVote = true; sendMsg({ type: "avVote", approve: true }); renderVote(); };
+$("rejectBtn").onclick = () => { myVote = false; sendMsg({ type: "avVote", approve: false }); renderVote(); };
+$("forceVote").onclick = () => sendMsg({ type: "avForce" });
+
+// ---- vote reveal ----
+function renderVoteReveal() {
+  showScreen("votereveal");
+  const lv = state.lastVote || { tally: [], approved: false };
+  const b = $("vrBanner");
+  b.className = "result-banner " + (lv.approved ? "good" : "evil");
+  b.textContent = lv.approved ? "✅ Team approved — on to the quest" : "❌ Team rejected" + (lv.timedOut ? " (time up)" : "");
+  $("vrList").innerHTML = (lv.tally || []).map(t =>
+    '<div class="prow"><span>' + escapeHtml(t.name) + '</span>' +
+    '<span class="rr ' + (t.approve ? "good" : "evil") + '">' + (t.approve ? "👍 Approve" : "👎 Reject") + '</span></div>').join("");
+}
+
+// ---- quest ----
+function renderQuest() {
+  showScreen("quest");
+  $("trackerQ").innerHTML = trackerHtml();
+  const names = nameMap();
+  $("questTitle").textContent = "Quest " + (state.quest + 1);
+  $("questTeam").innerHTML = (state.team || []).map(id => '<span class="tn">' + escapeHtml(names[id] || "?") + '</span>').join("");
+  const onTeam = (state.team || []).includes(myId());
+  const box = $("questAction");
+  if (onTeam && myCard == null) {
+    const evil = myRole && myRole.team === "evil";
+    box.innerHTML = '<div class="row2">' +
+      '<button class="btn good" id="succBtn">Succeed</button>' +
+      (evil ? '<button class="btn danger" id="failBtn">Sabotage (Fail)</button>' : '') + '</div>' +
+      (evil ? '' : '<p class="hint" style="text-align:center;margin-top:10px;">Loyal servants can only succeed.</p>');
+    $("succBtn").onclick = () => { myCard = true; sendMsg({ type: "avCard", success: true }); renderQuest(); };
+    if (evil) $("failBtn").onclick = () => { myCard = false; sendMsg({ type: "avCard", success: false }); renderQuest(); };
+  } else if (onTeam) {
+    box.innerHTML = '<p class="banner-phase mine">Card played — ' + (myCard ? "Success" : "Sabotage") + '. Waiting for the rest…</p>';
+  } else {
+    box.innerHTML = '<p class="banner-phase">You are not on this quest. Waiting…</p>';
+  }
+  $("questProgress").textContent = (state.cardsIn || 0) + " / " + (state.teamCount || (state.team || []).length) + " cards played";
+  $("forceQuest").classList.toggle("hidden", !amHost());
+}
+$("forceQuest").onclick = () => sendMsg({ type: "avForce" });
+
+// ---- quest reveal ----
+function renderQuestReveal() {
+  showScreen("questreveal");
+  const lq = state.lastQuest || { fails: 0, success: true, quest: 0, required: 1 };
+  const b = $("qrBanner");
+  b.className = "result-banner " + (lq.success ? "good" : "evil");
+  b.textContent = lq.success ? "✅ Quest " + (lq.quest + 1) + " succeeded" : "❌ Quest " + (lq.quest + 1) + " failed";
+  $("qrDetail").innerHTML =
+    '<div class="reveal-line"><span class="k">Fail cards played</span><span class="v">' + lq.fails + '</span></div>' +
+    '<div class="reveal-line"><span class="k">Fails needed to sink it</span><span class="v">' + lq.required + '</span></div>';
+}
+
+// ---- assassinate ----
+function renderAssassinate() {
+  showScreen("assassinate");
+  const names = nameMap();
+  const iAssassin = state.assassinId === myId();
+  const body = $("assassinBody");
+  if (iAssassin) {
+    body.innerHTML = '<p class="sub" style="text-align:center;">Good passed three quests. Name the player you believe is <b>Merlin</b>. Guess right and evil steals the win.</p>' +
+      '<div class="players" id="killList">' + state.players.filter(p => p.id !== myId()).map(p =>
+        '<div class="prow clickable ' + (assassinPick === p.id ? "picked" : "") + '" data-kill="' + p.id + '"><span>' + escapeHtml(p.name) + '</span>' +
+        (assassinPick === p.id ? '<span class="crown">🗡️ target</span>' : "") + '</div>').join("") + '</div>' +
+      '<button class="btn danger" id="killBtn" ' + (assassinPick ? "" : "disabled") + '>Assassinate</button>';
+    $("killList").onclick = e => { const r = e.target.closest("[data-kill]"); if (!r) return; assassinPick = r.getAttribute("data-kill"); renderAssassinate(); };
+    $("killBtn").onclick = () => { if (assassinPick) sendMsg({ type: "avAssassinate", target: assassinPick }); };
+  } else {
+    body.innerHTML = '<p class="sub" style="text-align:center;">Good passed three quests! But <b>' + escapeHtml(state.assassinName || "the Assassin") +
+      '</b> is now choosing who to assassinate. If they find Merlin, evil wins…</p>' +
+      '<div class="role-card evil" style="min-height:120px;"><div class="lock-emoji">🗡️</div><div class="tap-hint">Awaiting the Assassin…</div></div>';
+  }
+}
+
+// ---- result ----
+function renderResult() {
+  showScreen("result");
+  const r = state.result || {};
+  const b = $("resultBanner");
+  b.className = "result-banner " + (r.winner === "good" ? "good" : "evil");
+  b.textContent = r.winner === "good" ? "🛡️ Good wins!" : "🗡️ Evil wins!";
+  let html = '<div class="reveal-line"><span class="k">Outcome</span><span class="v">' + escapeHtml(r.reason || "") + '</span></div>';
+  if (r.merlinName) html += '<div class="reveal-line"><span class="k">Merlin</span><span class="v">' + escapeHtml(r.merlinName) + '</span></div>';
+  if (r.assassinName) html += '<div class="reveal-line"><span class="k">Assassin</span><span class="v">' + escapeHtml(r.assassinName) + '</span></div>';
+  if (r.assassinatedName) html += '<div class="reveal-line"><span class="k">Assassin targeted</span><span class="v">' + escapeHtml(r.assassinatedName) + '</span></div>';
+  html += '<div style="height:10px"></div>';
+  html += (r.players || []).map(p =>
+    '<div class="rrow"><span class="rn">' + escapeHtml(p.name) + '</span>' +
+    '<span class="rr ' + (p.team === "evil" ? "evil" : "good") + '">' + escapeHtml(p.roleLabel) + '</span></div>').join("");
+  $("resultDetail").innerHTML = html;
+  $("resultBtns").classList.toggle("hidden", !amHost());
+  $("resultWait").classList.toggle("hidden", amHost());
+}
+$("playAgainBtn").onclick = () => sendMsg({ type: "start" });
+$("toLobbyBtn").onclick = () => sendMsg({ type: "lobby" });
+$("beginBtn").onclick = () => sendMsg({ type: "avBegin" });
+
+// ---- countdown clock ----
+let clockTimer = null, clockEl = null, clockDeadline = null;
+function startClock(el, deadline) {
+  clockEl = el; clockDeadline = deadline;
+  tickClock();
+  clearInterval(clockTimer);
+  clockTimer = setInterval(tickClock, 250);
+}
+function tickClock() {
+  if (!clockEl || !clockDeadline) { if (clockEl) clockEl.textContent = ""; return; }
+  const ms = Math.max(0, clockDeadline - Date.now());
+  const secs = Math.ceil(ms / 1000);
+  clockEl.textContent = fmtClock(secs);
+  clockEl.classList.toggle("warn", secs <= 10);
+}
+function fmtClock(secs) { const m = Math.floor(secs / 60), s = secs % 60; return m + ":" + String(s).padStart(2, "0"); }
+
+// ---- settings (host) ----
+$("propRange").oninput = e => { $("propVal").textContent = fmtClock(+e.target.value); if (amHost()) pushSettings(); };
+$("voteRange").oninput = e => { $("voteVal").textContent = fmtClock(+e.target.value); if (amHost()) pushSettings(); };
+$("roleToggles").onchange = () => { if (amHost()) pushSettings(); };
+function pushSettings() {
+  const roles = {};
+  document.querySelectorAll('#roleToggles input[data-role]').forEach(c => { roles[c.getAttribute("data-role")] = c.checked; });
+  sendMsg({ type: "settings", proposeSeconds: +$("propRange").value, voteSeconds: +$("voteRange").value, roles });
+}
+
+$("startBtn").onclick = () => sendMsg({ type: "start" });
+
+// ---- home actions ----
+$("createBtn").onclick = () => {
+  const name = $("nameInput").value.trim();
+  if (!name) return banner("Enter your name first.");
+  session.name = name; sendMsg({ type: "create", name, game: GAME });
+};
+$("joinBtn").onclick = () => {
+  const name = $("nameInput").value.trim();
+  const code = $("codeInput").value.trim().toUpperCase();
+  if (!name) return banner("Enter your name first.");
+  if (code.length !== 4) return banner("Enter the 4-letter code.");
+  session.name = name; sendMsg({ type: "join", code, name });
+};
+
+// chat
+function sendChat() { const t = $("chatInput").value.trim(); if (!t) return; sendMsg({ type: "chat", text: t }); $("chatInput").value = ""; }
+$("chatSend").onclick = sendChat;
+$("chatInput").addEventListener("keydown", e => { if (e.key === "Enter") sendChat(); });
+
+// leave
+function doLeave(e) { if (e) e.preventDefault(); sendMsg({ type: "leave" }); clearSession(); state = null; myRole = null; showScreen("home"); }
+$("leaveBtn").onclick = doLeave;
+$("leaveLink").onclick = doLeave;
+
+if (session.name) $("nameInput").value = session.name;
+showScreen("home");
+connect();
+</script>
+</body>
+</html>

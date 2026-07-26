@@ -1,10 +1,14 @@
-// Imposter — online multiplayer server.
+// QFin Games — online multiplayer party-game host.
 //
-// A single Node process that (a) serves the static client and (b) runs a
+// A single Node process that (a) serves the static clients and (b) runs a
 // WebSocket endpoint at /ws for real-time room state. Rooms live in memory
-// keyed by a short code; there is no database. Each player's secret word is
-// sent only to that player's own socket — never broadcast — so the game can't
-// be won by inspecting network traffic.
+// keyed by a short code; there is no database.
+//
+// This file is game-agnostic plumbing: it owns rooms, players, host handoff,
+// chat, connection lifecycle, and phase timers. Each game (Imposter, Avalon)
+// is a self-contained module under ./games that plugs into a small interface
+// (see `api` below). Anything secret — a player's word, an Avalon role — is
+// sent only to that player's own socket, never in the broadcast state.
 
 const http = require("http");
 const fs = require("fs");
@@ -13,194 +17,7 @@ const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
 
 const PORT = process.env.PORT || 3000;
-const PUBLIC_DIR = __dirname;
-
-// ---------------------------------------------------------------------------
-// Word data + round logic (moved verbatim from the old client)
-// ---------------------------------------------------------------------------
-
-// Each category is a list of clusters. A cluster is an ORDERED similarity
-// gradient: adjacent words are most alike, the ends are most different.
-const WORDS = {
-  "Everyday": [
-    ["Comb","Hairbrush","Toothbrush","Razor","Nail clippers"],
-    ["Cushion","Pillow","Blanket","Duvet","Sleeping bag"],
-    ["Candle","Lantern","Flashlight","Desk lamp","Ceiling light"],
-    ["Wallet","Handbag","Backpack","Suitcase","Briefcase"],
-    ["Sponge","Mop","Broom","Bucket","Dustpan"],
-    ["Paperclip","Stapler","Sticky tape","Glue stick","Scissors"],
-    ["Touchpad","Mouse","Keyboard","Game controller","Remote control"],
-    ["Sun hat","Sunglasses","Umbrella","Raincoat","Wellies"],
-    ["Magnifying glass","Mirror","Window","Binoculars","Telescope"],
-    ["Kettle","Toaster","Microwave","Oven","Stove"],
-    ["Pen","Pencil","Marker","Crayon","Chalk"],
-    ["Cup","Mug","Glass","Bottle","Flask"],
-    ["Fork","Spoon","Ladle","Chopsticks","Knife"],
-    ["Watch","Bracelet","Ring","Necklace","Earring"],
-    ["Towel","Flannel","Washcloth","Bathrobe","Loofah"],
-    ["Key","Latch","Bolt","Padlock","Deadbolt"],
-    ["Notebook","Diary","Journal","Ledger","Binder"],
-    ["Plate","Bowl","Saucer","Platter","Tray"],
-    ["Clock","Alarm clock","Stopwatch","Timer","Hourglass"],
-    ["Envelope","Letter","Postcard","Parcel","Stamp"],
-    ["Sofa","Armchair","Stool","Bench","Beanbag"],
-    ["Blender","Whisk","Grater","Peeler","Rolling pin"]
-  ],
-  "Food": [
-    ["Pita","Naan","Flatbread","Calzone","Pizza"],
-    ["Crepe","Pancake","Waffle","French toast","Bagel"],
-    ["Noodles","Spaghetti","Macaroni","Ravioli","Lasagna"],
-    ["Taco","Wrap","Sandwich","Hot dog","Cheeseburger"],
-    ["Slushie","Sorbet","Frozen yogurt","Gelato","Ice cream"],
-    ["Scone","Muffin","Cupcake","Croissant","Donut"],
-    ["Mango","Pineapple","Honeydew","Cantaloupe","Watermelon"],
-    ["Nuts","Crackers","Crisps","Pretzel","Popcorn"],
-    ["Wonton","Dumpling","Spring roll","Sashimi","Sushi"],
-    ["Tea","Espresso","Latte","Cappuccino","Coffee"],
-    ["Apple","Pear","Peach","Plum","Apricot"],
-    ["Carrot","Parsnip","Turnip","Beetroot","Radish"],
-    ["Cheddar","Gouda","Mozzarella","Feta","Parmesan"],
-    ["Ketchup","Mustard","Mayonnaise","Relish","Barbecue sauce"],
-    ["Rice","Quinoa","Couscous","Barley","Oats"],
-    ["Fudge","Toffee","Caramel","Nougat","Marshmallow"],
-    ["Lemon","Lime","Orange","Grapefruit","Tangerine"],
-    ["Broccoli","Cauliflower","Cabbage","Kale","Spinach"],
-    ["Bacon","Ham","Sausage","Salami","Pepperoni"],
-    ["Almond","Walnut","Cashew","Pistachio","Hazelnut"],
-    ["Yogurt","Custard","Pudding","Mousse","Jelly"],
-    ["Chickpea","Lentil","Kidney bean","Black bean","Butter bean"]
-  ],
-  "Animals": [
-    ["Lion","Tiger","Jaguar","Cheetah","Leopard"],
-    ["Seal","Shark","Whale","Porpoise","Dolphin"],
-    ["Starfish","Jellyfish","Cuttlefish","Squid","Octopus"],
-    ["Lizard","Salamander","Newt","Toad","Frog"],
-    ["Vulture","Eagle","Falcon","Hawk","Owl"],
-    ["Albatross","Pelican","Seagull","Puffin","Penguin"],
-    ["Bison","Buffalo","Hippo","Rhino","Elephant"],
-    ["Squirrel","Hare","Rabbit","Wallaby","Kangaroo"],
-    ["Gecko","Iguana","Lizard","Alligator","Crocodile"],
-    ["Horse","Deer","Antelope","Zebra","Giraffe"],
-    ["Ant","Beetle","Ladybug","Grasshopper","Cricket"],
-    ["Bee","Wasp","Hornet","Fly","Mosquito"],
-    ["Cow","Goat","Sheep","Pig","Donkey"],
-    ["Duck","Goose","Swan","Chicken","Turkey"],
-    ["Mouse","Rat","Hamster","Gerbil","Guinea pig"],
-    ["Trout","Salmon","Cod","Tuna","Mackerel"],
-    ["Spider","Scorpion","Tick","Mite","Centipede"],
-    ["Wolf","Fox","Coyote","Jackal","Dingo"],
-    ["Bear","Panda","Sloth","Badger","Wolverine"],
-    ["Parrot","Cockatoo","Budgie","Canary","Finch"],
-    ["Snail","Slug","Worm","Leech","Caterpillar"],
-    ["Bat","Mole","Hedgehog","Shrew","Vole"]
-  ],
-  "Places": [
-    ["Taxi rank","Subway","Bus terminal","Train station","Airport"],
-    ["Waterfall","River","Lake","Swimming pool","Beach"],
-    ["Office","Classroom","Study hall","Bookshop","Library"],
-    ["Vet","Dentist","Pharmacy","Clinic","Hospital"],
-    ["Pub","Nightclub","Bar","Arcade","Casino"],
-    ["Botanical garden","Zoo","Aquarium","Art gallery","Museum"],
-    ["Cottage","Mansion","Fortress","Palace","Castle"],
-    ["Cave","Canyon","Glacier","Mountain","Volcano"],
-    ["Opera house","Stadium","Concert hall","Theatre","Cinema"],
-    ["Food truck","Diner","Restaurant","Cafe","Bakery"],
-    ["Kitchen","Pantry","Dining room","Living room","Bedroom"],
-    ["Attic","Loft","Basement","Cellar","Garage"],
-    ["Meadow","Field","Prairie","Savanna","Desert"],
-    ["Island","Peninsula","Cape","Reef","Atoll"],
-    ["Hamlet","Village","Town","City","Metropolis"],
-    ["Bridge","Overpass","Underpass","Tunnel","Viaduct"],
-    ["Farm","Ranch","Orchard","Vineyard","Plantation"],
-    ["Harbor","Dock","Pier","Marina","Wharf"],
-    ["Chapel","Church","Cathedral","Temple","Mosque"],
-    ["Gym","Spa","Sauna","Steam room","Pool"],
-    ["Bank","Post office","Town hall","Courthouse","Embassy"]
-  ],
-  "Sports": [
-    ["Dodgeball","Handball","Volleyball","Netball","Basketball"],
-    ["Racquetball","Table tennis","Squash","Badminton","Tennis"],
-    ["Skiing","Snowboarding","Skateboarding","Bodyboarding","Surfing"],
-    ["Wrestling","Judo","Karate","Kickboxing","Boxing"],
-    ["Polo","Lacrosse","Hockey","Rugby","Football"],
-    ["Tee-ball","Rounders","Cricket","Softball","Baseball"],
-    ["Rowing","Cycling","Hurdles","Sprinting","Running"],
-    ["Snooker","Darts","Bowling","Mini golf","Golf"],
-    ["Discus","Javelin","Fencing","Shooting","Archery"],
-    ["Trampolining","Diving","Gymnastics","Bouldering","Climbing"],
-    ["Marathon","Triathlon","Decathlon","Pentathlon","Heptathlon"],
-    ["Sailing","Kayaking","Canoeing","Rafting","Paddleboarding"],
-    ["Curling","Ice hockey","Figure skating","Speed skating","Bobsled"],
-    ["Long jump","Triple jump","High jump","Pole vault","Shot put"],
-    ["Weightlifting","Powerlifting","Bodybuilding","CrossFit","Strongman"],
-    ["Motocross","Rally","Formula 1","Karting","Drag racing"],
-    ["Horse racing","Show jumping","Dressage","Polo","Rodeo"],
-    ["Water polo","Synchronised swimming","Freediving","Snorkelling","Surfing"],
-    ["Abseiling","Mountaineering","Caving","Hiking","Orienteering"],
-    ["Cheerleading","Acrobatics","Parkour","Breakdancing","Tumbling"]
-  ]
-};
-
-const ALL_CLUSTERS = Object.values(WORDS).flat();
-
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-
-// How many players get an "off" (adjacent) word instead of the main crew word.
-// Drawn from a zero-modified Poisson: with probability `pNone` nobody is off;
-// otherwise the count follows a Poisson(lambda) truncated to >= 1. This is the
-// distribution the host sees and tunes in the lobby. Result is clamped to
-// [0, maxOff] so at least one player always holds the main word.
-function samplePoisson(lambda) {
-  const L = Math.exp(-lambda);
-  let k = 0, p = 1;
-  do { k++; p *= Math.random(); } while (p > L);
-  return k - 1;
-}
-function sampleOffCount(pNone, lambda, maxOff) {
-  if (maxOff <= 0) return 0;
-  if (Math.random() < pNone) return 0;
-  let k;
-  do { k = samplePoisson(lambda); } while (k < 1);   // truncate to >= 1
-  return Math.min(k, maxOff);
-}
-
-// Returns an array of length `playerCount`: each entry { imposter, word }.
-// `wantOff` is how many players should get an adjacent word (0..playerCount-1).
-function buildRound(playerCount, similarity, wantOff) {
-  const cluster = pick(ALL_CLUSTERS);
-  const ci = Math.floor(Math.random() * cluster.length);
-  const crewWord = cluster[ci];
-
-  const candidates = cluster
-    .map((w, i) => ({ w, d: Math.abs(i - ci) }))
-    .filter(o => o.d > 0)
-    .sort((a, b) => a.d - b.d)
-    .map(o => o.w);
-
-  const frac = (5 - similarity) / 4;                 // 0..1
-  const pos = candidates.length ? Math.round(frac * (candidates.length - 1)) : 0;
-  const imposterWords = candidates.length
-    ? [candidates[pos], ...candidates.filter((_, i) => i !== pos)]
-    : [crewWord];
-
-  const nImposters = Math.max(0, Math.min(wantOff, playerCount - 1, imposterWords.length));
-
-  const idx = [...Array(playerCount).keys()];
-  for (let i = idx.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [idx[i], idx[j]] = [idx[j], idx[i]];
-  }
-  const imposters = idx.slice(0, nImposters);
-  const wordFor = {};
-  imposters.forEach((p, i) => { wordFor[p] = imposterWords[i]; });
-
-  const roles = [];
-  for (let p = 0; p < playerCount; p++) {
-    if (p in wordFor) roles.push({ imposter: true, word: wordFor[p] });
-    else roles.push({ imposter: false, word: crewWord });
-  }
-  return roles;
-}
+const PUBLIC_DIR = path.join(__dirname, "public");
 
 // ---------------------------------------------------------------------------
 // Rooms
@@ -220,26 +37,21 @@ function newCode() {
 }
 function newId() { return crypto.randomBytes(9).toString("base64url"); }
 
-function createRoom() {
+function createRoom(gameId) {
+  const game = GAMES[gameId] || GAMES.imposter;
   const code = newCode();
   const room = {
     code,
-    players: new Map(),   // playerId -> { id, name, ws, connected, word }
+    gameId: game.id,
+    game,
+    players: new Map(),   // playerId -> { id, name, ws, connected, ... game fields }
     hostId: null,
-    // dist: zero-modified Poisson for how many players get an off word
-    // (pNone = chance nobody is off; lambda = shape of the >=1 tail).
-    settings: { similarity: 4, laps: 2, inPerson: false, dist: { pNone: 0.07, lambda: 0.91 } },
-    phase: "lobby",       // lobby | round | assigned | vote | guess | result
-    order: [],            // playerIds in clue-giving turn order
-    turnIndex: 0,         // whose turn it is within order
-    lap: 0,               // which clue lap (round) we're on, 0-based
-    clues: [],            // shared history: { name, word }
-    imposterId: null,     // SECRET: which player is the imposter
-    crewWord: null,       // SECRET: the crew's word
-    votes: {},            // voterId -> targetId
-    result: null,         // reveal payload, populated when the game ends
+    phase: "lobby",
     chat: [],             // shared chat log: { name, text }
+    g: {},                // game-specific state (namespaced so games can't collide)
+    timers: {},           // name -> { handle, at }  (phase countdowns)
   };
+  game.init(room);
   rooms.set(code, room);
   return room;
 }
@@ -247,52 +59,51 @@ function createRoom() {
 function connectedPlayers(room) {
   return [...room.players.values()].filter(p => p.connected);
 }
+function nameOf(room, id) { return room.players.get(id)?.name || "?"; }
 
 function send(ws, msg) {
   if (ws && ws.readyState === ws.OPEN) ws.send(JSON.stringify(msg));
 }
 
-// Public view of the room shared with everyone. Never contains the crew word
-// or the imposter's identity until the game reaches the reveal.
-function lobbyState(room) {
-  const st = {
+// ---- phase timers ----------------------------------------------------------
+// Games use these for nomination / voting countdowns. Each timer stores its
+// fire-at wall-clock time so the public state can carry a `deadline` the client
+// counts down to. Firing removes the entry, then runs the callback.
+function setTimer(room, name, ms, fn) {
+  clearTimer(room, name);
+  const at = Date.now() + ms;
+  const handle = setTimeout(() => {
+    delete room.timers[name];
+    if (rooms.has(room.code)) fn();
+  }, ms);
+  room.timers[name] = { handle, at };
+  return at;
+}
+function clearTimer(room, name) {
+  const t = room.timers[name];
+  if (t) { clearTimeout(t.handle); delete room.timers[name]; }
+}
+function clearTimers(room) { for (const n of Object.keys(room.timers)) clearTimer(room, n); }
+function timerDeadline(room, name) { return room.timers[name]?.at || null; }
+
+// ---- broadcast -------------------------------------------------------------
+// The base state is common to every game; the game module contributes the rest
+// via publicState(). Secrets never appear here.
+function baseState(room) {
+  return {
     type: "state",
     code: room.code,
+    game: room.gameId,
     phase: room.phase,
     hostId: room.hostId,
-    similarity: room.settings.similarity,
-    laps: room.settings.laps,
-    inPerson: room.settings.inPerson,
-    dist: { pNone: room.settings.dist.pNone, lambda: room.settings.dist.lambda },
-    lap: room.lap,
-    order: room.order,
-    turnIndex: room.turnIndex,
-    clues: room.clues,
-    chat: room.chat.slice(-60),
     players: [...room.players.values()]
       .filter(p => p.connected)
       .map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId })),
-    // public suspicion marks: voterId -> { targetId: 'like'|'dislike' }
-    marks: Object.fromEntries(
-      [...room.players.values()]
-        .filter(p => p.connected && Object.keys(p.marks).length)
-        .map(p => [p.id, p.marks])),
+    chat: room.chat.slice(-60),
   };
-  if (room.phase === "vote") {
-    st.voters = Object.keys(room.votes);           // who has voted (not their choice)
-    st.needed = connectedPlayers(room).length;
-  }
-  if (room.phase === "guess") {
-    // The imposter has been caught, so revealing who is guessing is fine.
-    st.caughtId = room.imposterId;
-    st.caughtName = room.players.get(room.imposterId)?.name || "?";
-  }
-  if (room.phase === "result") st.result = room.result;
-  return st;
 }
-
 function broadcastState(room) {
-  const state = lobbyState(room);
+  const state = Object.assign(baseState(room), room.game.publicState(room) || {});
   for (const p of room.players.values()) send(p.ws, state);
 }
 
@@ -302,10 +113,29 @@ function ensureHost(room) {
   const next = connectedPlayers(room)[0];
   room.hostId = next ? next.id : null;
 }
-
 function destroyIfEmpty(room) {
-  if (connectedPlayers(room).length === 0) rooms.delete(room.code);
+  if (connectedPlayers(room).length === 0) { clearTimers(room); rooms.delete(room.code); }
 }
+
+function roomFor(ws) { return rooms.get(ws.roomCode); }
+function isHost(ws, room) { return room && room.hostId === ws.playerId; }
+
+// The toolkit handed to each game module so it never touches `rooms` directly.
+const api = {
+  send, broadcastState, connectedPlayers, ensureHost,
+  isHost: (ws, room) => isHost(ws, room),
+  playerId: ws => ws.playerId,
+  nameOf,
+  newId,
+  setTimer, clearTimer, clearTimers, timerDeadline,
+  now: () => Date.now(),
+};
+
+// Games are loaded as factories so they capture `api` once.
+const GAMES = {
+  imposter: require("./games/imposter")(api),
+  avalon:   require("./games/avalon")(api),
+};
 
 // ---------------------------------------------------------------------------
 // Message handling
@@ -313,32 +143,26 @@ function destroyIfEmpty(room) {
 
 function handle(ws, msg) {
   switch (msg.type) {
-    case "create": return onJoin(ws, { name: msg.name });
+    case "create": return onJoin(ws, { name: msg.name, gameId: msg.game });
     case "join":   return onJoin(ws, { name: msg.name, code: msg.code, playerId: msg.playerId });
     case "rejoin": return onJoin(ws, { code: msg.code, playerId: msg.playerId, rejoinOnly: true });
-    case "settings": return onSettings(ws, msg);
-    case "start":  return onStart(ws);
-    case "reveal": return onReveal(ws);
-    case "clue":   return onClue(ws, msg);
-    case "skip":   return onSkip(ws);
-    case "vote":   return onVote(ws, msg);
-    case "tally":  return onTally(ws);
-    case "guess":  return onGuess(ws, msg);
-    case "forfeit": return onForfeit(ws);
-    case "lobby":  return onLobby(ws);
     case "chat":   return onChat(ws, msg);
-    case "mark":   return onMark(ws, msg);
     case "leave":  return onLeave(ws);
+    default: {
+      // Everything else is game-specific.
+      const room = roomFor(ws);
+      if (room) room.game.onMessage(ws, msg, room);
+    }
   }
 }
 
-function onJoin(ws, { name, code, playerId, rejoinOnly }) {
+function onJoin(ws, { name, code, playerId, gameId, rejoinOnly }) {
   let room;
   if (code) {
     room = rooms.get(code.toUpperCase());
     if (!room) return send(ws, { type: "error", code: "no_room", message: "No room with that code." });
   } else {
-    room = createRoom();
+    room = createRoom(gameId);
   }
 
   // Reconnect path: known player rejoining (e.g. after a phone screen lock).
@@ -350,7 +174,8 @@ function onJoin(ws, { name, code, playerId, rejoinOnly }) {
   } else {
     if (rejoinOnly) return send(ws, { type: "error", code: "gone", message: "That session expired." });
     const cleanName = (name || "Player").toString().trim().slice(0, 20) || "Player";
-    player = { id: newId(), name: cleanName, ws, connected: true, word: null, marks: {} };
+    player = { id: newId(), name: cleanName, ws, connected: true };
+    room.game.initPlayer(room, player);
     room.players.set(player.id, player);
   }
 
@@ -361,215 +186,15 @@ function onJoin(ws, { name, code, playerId, rejoinOnly }) {
   send(ws, {
     type: "joined",
     code: room.code,
+    game: room.gameId,
     playerId: player.id,
     you: { id: player.id, name: player.name },
   });
-  // If they reconnected mid-round, resend their secret word + private marks.
-  if ((room.phase === "round" || room.phase === "assigned") && player.word != null) {
-    send(ws, { type: "round", word: player.word });
-  }
-  if (room.phase === "guess" && player.id === room.imposterId) {
-    send(ws, { type: "guessPrompt" });
-  }
+  // Resend any per-player private info (secret word, Avalon role, prompts).
+  room.game.onReconnect(room, player);
   broadcastState(room);
 }
 
-function roomFor(ws) { return rooms.get(ws.roomCode); }
-function isHost(ws, room) { return room && room.hostId === ws.playerId; }
-
-function onSettings(ws, msg) {
-  const room = roomFor(ws);
-  if (!isHost(ws, room)) return;
-  const s = parseInt(msg.similarity, 10);
-  if (s >= 1 && s <= 5) room.settings.similarity = s;
-  const l = parseInt(msg.laps, 10);
-  if (l >= 1 && l <= 6) room.settings.laps = l;
-  if (typeof msg.inPerson === "boolean") room.settings.inPerson = msg.inPerson;
-  if (typeof msg.pNone === "number" && msg.pNone >= 0 && msg.pNone <= 0.9)
-    room.settings.dist.pNone = msg.pNone;
-  if (typeof msg.lambda === "number" && msg.lambda >= 0.05 && msg.lambda <= 5)
-    room.settings.dist.lambda = msg.lambda;
-  broadcastState(room);
-}
-
-function onStart(ws) {
-  const room = roomFor(ws);
-  if (!isHost(ws, room)) return;
-  const players = connectedPlayers(room);
-  if (players.length < 3) {
-    return send(ws, { type: "error", code: "too_few", message: "Need at least 3 players." });
-  }
-  // How many players get an off word. In the on-phone vote game the catch/guess
-  // flow assumes exactly one imposter, so it's always 1 there. In "just assign
-  // words" mode the count is drawn from the host's distribution (0..many).
-  const wantOff = room.settings.inPerson
-    ? sampleOffCount(room.settings.dist.pNone, room.settings.dist.lambda, players.length - 1)
-    : 1;
-  const roles = buildRound(players.length, room.settings.similarity, wantOff);
-  // "inPerson" mode just hands out the words; there is no on-phone clue/vote
-  // flow, so the round sits in the "assigned" phase until the host reveals.
-  room.phase = room.settings.inPerson ? "assigned" : "round";
-  room.clues = [];
-  room.turnIndex = 0;
-  room.lap = 0;
-  room.votes = {};
-  room.result = null;
-  room.imposterIds = [];   // every player who got an off word this round
-  room.imposterId = null;  // the single imposter (on-phone vote game)
-  room.crewWord = null;
-  // fresh suspicion marks each game
-  players.forEach(p => { p.marks = {}; });
-  // randomized clue-giving order (Fisher–Yates over the connected players)
-  const order = players.map(p => p.id);
-  for (let i = order.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [order[i], order[j]] = [order[j], order[i]];
-  }
-  room.order = order;
-  players.forEach((p, i) => {
-    p.word = roles[i].word;
-    if (roles[i].imposter) room.imposterIds.push(p.id);
-    else room.crewWord = roles[i].word;   // every crew member shares this word
-    send(p.ws, { type: "round", word: p.word });
-  });
-  room.imposterId = room.imposterIds[0] || null;
-  broadcastState(room);
-}
-
-// "Just assign words" mode: the host ends the round and everyone sees the
-// reveal (imposter + both words). There is no on-phone vote, so no winner.
-function onReveal(ws) {
-  const room = roomFor(ws);
-  if (!isHost(ws, room) || room.phase !== "assigned") return;
-  const nameOf = id => room.players.get(id)?.name || "?";
-  // Everyone who got an off word, with the word they held.
-  const odd = (room.imposterIds || [])
-    .map(id => ({ name: nameOf(id), word: room.players.get(id)?.word || null }))
-    .filter(o => o.word != null);
-  room.result = {
-    mode: "reveal",
-    crewWord: room.crewWord,
-    odd,                         // [] means nobody was off this round
-  };
-  room.phase = "result";
-  broadcastState(room);
-}
-
-// Advance the turn. At the end of a lap, start the next lap; once all laps
-// (rounds) are done, move everyone to the vote.
-function advanceTurn(room) {
-  room.turnIndex++;
-  if (room.turnIndex >= room.order.length) {
-    room.lap++;
-    if (room.lap >= room.settings.laps) { startVote(room); return; }
-    room.turnIndex = 0;   // next lap, same order
-  }
-  broadcastState(room);
-}
-
-function startVote(room) {
-  room.phase = "vote";
-  room.votes = {};
-  broadcastState(room);
-}
-
-// Each player votes for who they think the imposter is.
-function onVote(ws, msg) {
-  const room = roomFor(ws);
-  if (!room || room.phase !== "vote") return;
-  const target = msg.target;
-  if (!room.players.has(target) || target === ws.playerId) return;  // must pick another player
-  room.votes[ws.playerId] = target;
-  const allVoted = connectedPlayers(room).every(p => room.votes[p.id]);
-  if (allVoted) resolveVotes(room);
-  else broadcastState(room);
-}
-
-// Host can force the tally (e.g. someone dropped and can't vote).
-function onTally(ws) {
-  const room = roomFor(ws);
-  if (isHost(ws, room) && room.phase === "vote") resolveVotes(room);
-}
-
-// The imposter is "caught" only if they receive a strict majority of the votes
-// cast. Otherwise the imposter escapes and wins immediately.
-function resolveVotes(room) {
-  const cast = Object.values(room.votes);
-  const total = cast.length;
-  const forImposter = cast.filter(t => t === room.imposterId).length;
-  const caught = total > 0 && forImposter * 2 > total;
-  if (caught) {
-    room.phase = "guess";
-    send(room.players.get(room.imposterId)?.ws, { type: "guessPrompt" });
-    broadcastState(room);
-  } else {
-    finalize(room, { caught: false, guess: null, winner: "imposter",
-      reason: "The imposter dodged a majority vote and escaped." });
-  }
-}
-
-// A caught imposter guesses the crew word. An exact match, or a guess that is a
-// substring or superstring of the real word (case-insensitive), steals the win.
-function onGuess(ws, msg) {
-  const room = roomFor(ws);
-  if (!room || room.phase !== "guess" || ws.playerId !== room.imposterId) return;
-  const g = (msg.word || "").toString().trim();
-  const gl = g.toLowerCase(), wl = (room.crewWord || "").toLowerCase();
-  const correct = gl.length > 0 && (gl === wl || wl.includes(gl) || gl.includes(wl));
-  finalize(room, {
-    caught: true,
-    guess: g,
-    winner: correct ? "imposter" : "crew",
-    reason: correct
-      ? "Caught — but nailed the word and stole the win!"
-      : "Caught, and the guess was wrong. Crew wins!",
-  });
-}
-
-// Host fallback if a caught imposter disconnects before guessing.
-function onForfeit(ws) {
-  const room = roomFor(ws);
-  if (isHost(ws, room) && room.phase === "guess") {
-    finalize(room, { caught: true, guess: null, winner: "crew",
-      reason: "No guess from the imposter. Crew wins!" });
-  }
-}
-
-// Build the full reveal and end the game.
-function finalize(room, o) {
-  const nameOf = id => room.players.get(id)?.name || "?";
-  const tallyMap = {};
-  for (const t of Object.values(room.votes)) tallyMap[t] = (tallyMap[t] || 0) + 1;
-  const tally = Object.entries(tallyMap)
-    .map(([id, count]) => ({ id, name: nameOf(id), count }))
-    .sort((a, b) => b.count - a.count);
-  const votes = Object.entries(room.votes)
-    .map(([voter, target]) => ({ voterName: nameOf(voter), targetName: nameOf(target) }));
-  room.result = {
-    imposterId: room.imposterId,
-    imposterName: nameOf(room.imposterId),
-    crewWord: room.crewWord,
-    imposterWord: room.players.get(room.imposterId)?.word || null,
-    caught: o.caught,
-    guess: o.guess,
-    winner: o.winner,          // "crew" | "imposter"
-    reason: o.reason,
-    tally,
-    votes,
-  };
-  room.phase = "result";
-  broadcastState(room);
-}
-
-// Host returns the room to the lobby (e.g. to change settings between games).
-function onLobby(ws) {
-  const room = roomFor(ws);
-  if (!isHost(ws, room)) return;
-  room.phase = "lobby";
-  broadcastState(room);
-}
-
-// ---- chat + suspicion marks ----
 function onChat(ws, msg) {
   const room = roomFor(ws);
   if (!room) return;
@@ -581,47 +206,12 @@ function onChat(ws, msg) {
   broadcastState(room);
 }
 
-// Public suspicion marks: each player marks others "like" / "dislike" (or
-// clears it). Everyone sees the tallies via the broadcast state.
-function onMark(ws, msg) {
-  const room = roomFor(ws);
-  if (!room) return;
-  const player = room.players.get(ws.playerId);
-  if (!player) return;
-  const target = msg.target;
-  if (!room.players.has(target) || target === ws.playerId) return;
-  if (msg.value === "like" || msg.value === "dislike") player.marks[target] = msg.value;
-  else delete player.marks[target];
-  broadcastState(room);
-}
-
-// The player whose turn it is submits their one-word clue.
-function onClue(ws, msg) {
-  const room = roomFor(ws);
-  if (!room || room.phase !== "round") return;
-  if (room.order[room.turnIndex] !== ws.playerId) return;   // not your turn
-  const word = (msg.word || "").toString().trim().slice(0, 40);
-  if (!word) return;
-  const player = room.players.get(ws.playerId);
-  room.clues.push({ name: player ? player.name : "?", word });
-  advanceTurn(room);
-}
-
-// Host can skip the current player (e.g. they disconnected or are stalling).
-function onSkip(ws) {
-  const room = roomFor(ws);
-  if (!isHost(ws, room) || room.phase !== "round") return;
-  const skippedId = room.order[room.turnIndex];
-  const player = room.players.get(skippedId);
-  room.clues.push({ name: player ? player.name : "?", word: "—", skipped: true });
-  advanceTurn(room);
-}
-
 function onLeave(ws) {
   const room = roomFor(ws);
   if (!room) return;
   room.players.delete(ws.playerId);
   ensureHost(room);
+  if (room.game.onPlayerGone) room.game.onPlayerGone(room);
   broadcastState(room);
   destroyIfEmpty(room);
 }
@@ -632,21 +222,30 @@ function onDisconnect(ws) {
   const player = room.players.get(ws.playerId);
   if (player) player.connected = false;
   ensureHost(room);
+  if (room.game.onPlayerGone) room.game.onPlayerGone(room);
   broadcastState(room);
   // Keep the room alive briefly so a reconnecting phone can rejoin; only tear
   // down once nobody has been connected for a while.
-  setTimeout(() => { if (room) destroyIfEmpty(room); }, 60 * 1000);
+  setTimeout(() => { if (rooms.get(room.code) === room) destroyIfEmpty(room); }, 60 * 1000);
 }
 
 // ---------------------------------------------------------------------------
 // HTTP static server + WebSocket upgrade
 // ---------------------------------------------------------------------------
 
-const MIME = { ".html": "text/html", ".png": "image/png", ".css": "text/css", ".js": "text/javascript", ".ico": "image/x-icon" };
+const MIME = { ".html": "text/html", ".png": "image/png", ".css": "text/css", ".js": "text/javascript", ".ico": "image/x-icon", ".svg": "image/svg+xml" };
+
+// Friendly routes -> files in public/. Anything else is looked up literally.
+const ROUTES = {
+  "/": "/home.html",
+  "/imposter": "/imposter.html",
+  "/avalon": "/avalon.html",
+  "/teams": "/teams.html",
+};
 
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split("?")[0]);
-  if (urlPath === "/") urlPath = "/index.html";
+  if (ROUTES[urlPath]) urlPath = ROUTES[urlPath];
   // Resolve within PUBLIC_DIR and reject path traversal.
   const filePath = path.join(PUBLIC_DIR, urlPath);
   if (!filePath.startsWith(PUBLIC_DIR)) { res.writeHead(403); return res.end("Forbidden"); }
@@ -684,4 +283,4 @@ setInterval(() => {
   }
 }, 30 * 1000);
 
-server.listen(PORT, () => console.log(`Imposter server on http://localhost:${PORT}`));
+server.listen(PORT, () => console.log(`QFin Games server on http://localhost:${PORT}`));
