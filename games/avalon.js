@@ -61,34 +61,35 @@ function shuffle(a) {
   return arr;
 }
 
-// Every named role the host can toggle in or out, in priority order per team.
-// (Loyal Servant and Minion are automatic fillers — never toggled.)
-const GOOD_TOGGLES = ["merlin", "percival"];
-const EVIL_TOGGLES = ["assassin", "morgana", "mordred", "oberon"];
+// The host builds an explicit line-up: one role per seat (= per player), chosen
+// from dropdowns, then the roles are shuffled out to players when dealt. Special
+// roles may appear at most once; Loyal Servant / Minion are unlimited fillers.
+const SPECIAL_ROLES = ["merlin", "percival", "assassin", "morgana", "mordred", "oberon"];
+const ALL_ROLE_KEYS = [...SPECIAL_ROLES, "servant", "minion"];
 
-// How many evil players for `n` under `settings`: the host's override if set,
-// otherwise the standard table. Always clamped to leave at least one of each side.
-function effectiveEvil(n, settings) {
-  const base = settings.evilCount == null ? (EVIL_COUNT[n] || 2) : settings.evilCount;
-  return Math.max(1, Math.min(n - 1, base));
+// A sensible starting line-up for `n` players — the host can change every seat.
+function defaultComposition(n) {
+  const evilCount = EVIL_COUNT[n] || Math.max(1, Math.round(n / 3));
+  const goodCount = Math.max(1, n - evilCount);
+  const good = ["merlin"];
+  if (goodCount >= 3) good.push("percival");
+  while (good.length < goodCount) good.push("servant");
+  const evil = ["assassin"];
+  if (evilCount >= 2) evil.push("morgana");
+  while (evil.length < evilCount) evil.push("minion");
+  return [...good.slice(0, goodCount), ...evil.slice(0, evilCount)];
 }
 
-// The exact list of roles that will be dealt for `n` players under `settings`.
-// Enabled special roles beyond a team's count are dropped in priority order
-// (higher priority kept); each team fills the rest with Loyal Servants / Minions.
-function buildRoleList(n, settings) {
-  const evilCount = effectiveEvil(n, settings);
-  const goodCount = n - evilCount;
-
-  const good = GOOD_TOGGLES.filter(r => settings.roles[r]);
-  good.length = Math.min(good.length, goodCount);
-  while (good.length < goodCount) good.push("servant");
-
-  const evil = EVIL_TOGGLES.filter(r => settings.roles[r]);
-  evil.length = Math.min(evil.length, evilCount);
-  while (evil.length < evilCount) evil.push("minion");
-
-  return { roles: [...good, ...evil], evilCount, goodCount };
+// Is a line-up legal to deal? Specials unique, at least one of each side.
+function validateComposition(comp) {
+  for (const r of comp) if (!ALL_ROLE_KEYS.includes(r)) return { valid: false, reason: "Unknown role in the line-up." };
+  for (const s of SPECIAL_ROLES) if (comp.filter(r => r === s).length > 1)
+    return { valid: false, reason: ROLE_META[s].label + " can only be in the game once." };
+  const evil = comp.filter(r => ROLE_META[r].team === "evil").length;
+  const good = comp.length - evil;
+  if (evil < 1) return { valid: false, reason: "Add at least one evil role." };
+  if (good < 1) return { valid: false, reason: "Add at least one good role." };
+  return { valid: true, reason: null, good, evil };
 }
 
 module.exports = (api) => {
@@ -108,13 +109,9 @@ module.exports = (api) => {
       settings: {
         proposeSeconds: 90,   // nomination time limit
         voteSeconds: 60,      // voting window once a team is nominated
-        // Which named roles are dealt. Merlin + Assassin are on by default (they
-        // are the heart of the game) but the host may toggle any of them.
-        roles: { merlin: true, percival: true, assassin: true, morgana: true, mordred: false, oberon: false },
-        // Number of evil players. null = use the standard player-count table;
-        // set it to override the good/evil balance (and thus how many generic
-        // Loyal Servants vs Minions of Mordred there are).
-        evilCount: null,
+        // The role line-up: one entry per seat. null = derive a default from the
+        // player count; the host edits it seat-by-seat in the lobby.
+        composition: null,
       },
       order: [],            // seat order (playerIds), fixed for the game
       leaderIndex: 0,
@@ -131,14 +128,26 @@ module.exports = (api) => {
     };
   }
 
+  // The role line-up to deal, always resized to the current player count. An
+  // unset or stale line-up falls back to (or extends from) the default. Persists
+  // the resized version so the host's dropdowns stay in sync as players join/leave.
+  function getComposition(room) {
+    const n = connectedPlayers(room).length;
+    let comp = room.g.settings.composition;
+    if (!Array.isArray(comp) || comp.length === 0) comp = defaultComposition(n);
+    if (comp.length < n) comp = [...comp, ...Array(n - comp.length).fill("servant")];
+    else if (comp.length > n) comp = comp.slice(0, n);
+    room.g.settings.composition = comp;
+    return comp;
+  }
+
   // ---- role dealing + night knowledge -------------------------------------
   function deal(room) {
     const g = room.g;
     const players = connectedPlayers(room);
     const n = players.length;
     const order = shuffle(players.map(p => p.id));
-    const { roles } = buildRoleList(n, g.settings);
-    const dealt = shuffle(roles);
+    const dealt = shuffle(getComposition(room));
 
     order.forEach((id, i) => {
       const p = room.players.get(id);
@@ -204,7 +213,6 @@ module.exports = (api) => {
       settings: {
         proposeSeconds: g.settings.proposeSeconds,
         voteSeconds: g.settings.voteSeconds,
-        roles: Object.assign({}, g.settings.roles),
       },
       order: g.order,
       quest: g.quest,
@@ -218,21 +226,19 @@ module.exports = (api) => {
       const c = connectedPlayers(room).length;
       const ok = c >= MIN_PLAYERS && c <= MAX_PLAYERS;
       st.playerCount = c;
-      st.canStart = ok;
       st.teamSizes = ok ? QUEST_TEAMS[c] : null;
-      st.evilAuto = g.settings.evilCount == null;
       if (ok) {
-        const list = buildRoleList(c, g.settings).roles;
-        const evil = effectiveEvil(c, g.settings);
-        st.rolePreview = list.map(r => ROLE_META[r].label);
-        st.evilCount = evil;
-        st.goodCount = c - evil;
-        st.genericGood = list.filter(r => r === "servant").length;   // Loyal Servants
-        st.genericEvil = list.filter(r => r === "minion").length;    // Minions of Mordred
-        st.evilMin = 1;
-        st.evilMax = c - 1;
+        const comp = getComposition(room);
+        const v = validateComposition(comp);
+        st.composition = comp;                                        // one role per seat
+        st.goodCount = comp.filter(r => ROLE_META[r].team === "good").length;
+        st.evilCount = comp.filter(r => ROLE_META[r].team === "evil").length;
+        st.compValid = v.valid;
+        st.compReason = v.reason;
+        st.canStart = v.valid;
       } else {
-        st.rolePreview = null;
+        st.composition = null;
+        st.canStart = false;
       }
     }
     if (room.phase === "proposal" || room.phase === "teamVote" || room.phase === "voteReveal") {
@@ -292,14 +298,10 @@ module.exports = (api) => {
     if (ps >= 15 && ps <= 600) s.proposeSeconds = ps;
     const vs = parseInt(msg.voteSeconds, 10);
     if (vs >= 15 && vs <= 600) s.voteSeconds = vs;
-    if (msg.roles && typeof msg.roles === "object") {
-      for (const r of [...GOOD_TOGGLES, ...EVIL_TOGGLES])
-        if (typeof msg.roles[r] === "boolean") s.roles[r] = msg.roles[r];
-    }
-    if ("evilCount" in msg) {
-      // null / "auto" restores the standard table; a number overrides it.
-      if (msg.evilCount == null || msg.evilCount === "auto") s.evilCount = null;
-      else { const e = parseInt(msg.evilCount, 10); if (e >= 1 && e <= 9) s.evilCount = e; }
+    if (Array.isArray(msg.composition)) {
+      // Keep only known role keys; empty means "reset to default" (null).
+      const comp = msg.composition.filter(r => ALL_ROLE_KEYS.includes(r));
+      s.composition = comp.length ? comp : null;
     }
     broadcastState(room);
   }
@@ -311,6 +313,8 @@ module.exports = (api) => {
       return send(ws, { type: "error", code: "bad_count",
         message: `Avalon needs ${MIN_PLAYERS}–${MAX_PLAYERS} players (you have ${c}).` });
     }
+    const v = validateComposition(getComposition(room));
+    if (!v.valid) return send(ws, { type: "error", code: "bad_roles", message: v.reason });
     clearTimers(room);
     const g = room.g;
     g.quest = 0;

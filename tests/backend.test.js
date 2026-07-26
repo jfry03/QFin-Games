@@ -203,30 +203,45 @@ function testAvalonTimers() {
   ok(room.phase === "result" && room.g.result.winner === "evil", "5 rejects in a row -> evil wins");
 }
 
-function testAvalonBalance() {
-  console.log("Avalon team balance override (backend):");
+function testAvalonComposition() {
+  console.log("Avalon per-seat role line-up (backend):");
   const { game } = harness(require(path.join(ROOT, "games/avalon")), "avalon");
   const room = makeRoom(game, "avalon");
   const ps = ["a", "b", "c", "d", "e"].map(n => join(room, game, n));
   const host = ps[0].ws;
-  game.onMessage(host, { type: "settings" }, room); // trigger a broadcast
   let st = game.publicState(room);
-  ok(st.evilCount === 2 && st.goodCount === 3 && st.evilAuto === true, "n=5 default is 2 evil / 3 good (auto)");
-  game.onMessage(host, { type: "settings", evilCount: 3 }, room);
+  ok(Array.isArray(st.composition) && st.composition.length === 5, "default line-up has one role per seat");
+  ok(st.goodCount === 3 && st.evilCount === 2 && st.compValid === true, "default is 3 good / 2 evil and valid");
+
+  // Custom line-up: 3 evil, no Merlin.
+  game.onMessage(host, { type: "settings", composition: ["percival", "servant", "assassin", "morgana", "minion"] }, room);
   st = game.publicState(room);
-  ok(st.evilCount === 3 && st.goodCount === 2 && st.evilAuto === false, "override -> 3 evil / 2 good");
+  ok(st.evilCount === 3 && st.goodCount === 2 && st.compValid === true, "custom line-up -> 3 evil / 2 good");
   game.onMessage(host, { type: "start" }, room);
-  ok(ps.filter(p => p.team === "evil").length === 3, "deals 3 evil when overridden");
+  ok(ps.filter(p => p.team === "evil").length === 3, "deals exactly the chosen 3 evil");
+  ok(ps.map(p => p.role).sort().join(",") === "assassin,minion,morgana,percival,servant", "deals exactly the chosen roles");
+
+  // Invalid: two Merlins -> can't start.
   game.onMessage(host, { type: "lobby" }, room);
-  game.onMessage(host, { type: "settings", evilCount: 9 }, room);
-  ok(game.publicState(room).evilCount === 4, "evil count clamps to n-1");
-  game.onMessage(host, { type: "settings", evilCount: null }, room);
-  ok(game.publicState(room).evilAuto === true, "null restores the standard table");
+  game.onMessage(host, { type: "settings", composition: ["merlin", "merlin", "servant", "assassin", "minion"] }, room);
+  st = game.publicState(room);
+  ok(st.compValid === false && /Merlin/.test(st.compReason), "duplicate special is invalid");
+  let err = null; host._recv = m => { if (m.type === "error") err = m; };
+  game.onMessage(host, { type: "start" }, room);
+  ok(room.phase === "lobby" && err && /Merlin/.test(err.message), "start blocked on invalid line-up");
+
+  // Invalid: all good -> needs an evil.
+  game.onMessage(host, { type: "settings", composition: ["merlin", "percival", "servant", "servant", "servant"] }, room);
+  ok(game.publicState(room).compValid === false, "no evil is invalid");
+
+  // A 6th player joins -> line-up resizes to 6 seats.
+  const p6 = join(room, game, "f");
+  ok(game.publicState(room).composition.length === 6, "line-up resizes when a player joins");
 }
 
 testImposter();
 testAvalon();
 testAvalonTimers();
-testAvalonBalance();
+testAvalonComposition();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

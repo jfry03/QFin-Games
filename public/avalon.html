@@ -129,29 +129,26 @@
   .footer-note a { color: var(--accent2); }
   .banner { background: var(--danger); color: #fff; padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; margin-bottom: 14px; text-align: center; }
   .status-dot { font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: 10px; }
-  .toggle-list { display: flex; flex-direction: column; gap: 8px; }
-  .toggle { display: flex; align-items: center; justify-content: space-between; background: var(--card); border-radius: 12px; padding: 12px 14px; }
-  .toggle .tinfo b { font-weight: 700; } .toggle .tinfo span { display: block; color: var(--muted); font-size: 0.78rem; }
-  .switch { position: relative; width: 48px; height: 28px; flex: none; }
-  .switch input { display: none; }
-  .switch .slider { position: absolute; inset: 0; background: var(--card2); border-radius: 999px; transition: .15s; }
-  .switch .slider:before { content: ""; position: absolute; width: 22px; height: 22px; left: 3px; top: 3px; background: #fff; border-radius: 50%; transition: .15s; }
-  .switch input:checked + .slider { background: var(--good); }
-  .switch input:checked + .slider:before { transform: translateX(20px); }
-  .switch input:disabled + .slider { opacity: 0.5; }
-  .toggle .tinfo b.tn-good { color: var(--good); }
-  .toggle .tinfo b.tn-evil { color: var(--danger); }
-  .stepper { display: flex; align-items: center; gap: 12px; }
-  .stepper button { width: 54px; height: 46px; border: none; border-radius: 12px; background: var(--card); color: var(--text); font-size: 1.5rem; font-weight: 800; cursor: pointer; }
-  .stepper button:active { transform: scale(0.96); }
-  .stepper button:disabled { opacity: 0.4; }
-  .stepper .stepval { flex: 1; text-align: center; font-weight: 700; }
-  .stepper .stepval .sg { color: var(--good); } .stepper .stepval .se { color: var(--danger); }
+  /* per-seat role line-up */
+  .comp-list { display: flex; flex-direction: column; gap: 8px; }
+  .comp-row { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 12px; padding: 8px 12px; border-left: 4px solid var(--card2); }
+  .comp-row.good { border-left-color: var(--good); }
+  .comp-row.evil { border-left-color: var(--danger); }
+  .comp-row .cn { width: 22px; text-align: center; color: var(--muted); font-weight: 800; font-size: 0.9rem; flex: none; }
+  .comp-sel { flex: 1; padding: 11px 12px; border-radius: 10px; border: 1.5px solid var(--card2); background: var(--card2); color: var(--text); font-size: 1rem; font-weight: 600; outline: none; -webkit-appearance: none; appearance: none; }
+  .comp-sel:disabled { opacity: 0.8; }
+  /* roster strip shown across in-game screens */
+  .roombar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; background: var(--card); border-radius: 12px; padding: 8px 10px; margin-bottom: 14px; }
+  .roombar .rb-lbl { font-size: 0.68rem; color: var(--muted); letter-spacing: 1px; text-transform: uppercase; margin-right: 4px; }
+  .roombar .rb-chip { background: var(--card2); border-radius: 999px; padding: 4px 10px; font-size: 0.82rem; font-weight: 600; }
+  .roombar .rb-chip.me { border: 1px solid var(--accent2); }
+  .roombar .rb-chip .rb-h { color: var(--gold); }
 </style>
 </head>
 <body>
 <div id="app">
   <div id="banner" class="banner hidden"></div>
+  <div id="roomBar" class="roombar hidden"></div>
 
   <!-- HOME -->
   <section id="home" class="screen">
@@ -189,24 +186,9 @@
     </div>
 
     <div class="field">
-      <label>Roles</label>
-      <div class="toggle-list" id="roleToggles"></div>
-      <div class="hint">Toggle each role in or out. Any seats not given a special role become Loyal Servants (good) / Minions of Mordred (evil). Specials beyond a team's count are dropped.</div>
-    </div>
-
-    <div class="field">
-      <label>Team balance <span class="val-pill" id="balancePill">—</span></label>
-      <div class="stepper">
-        <button id="evilMinus">−</button>
-        <div class="stepval"><span class="sg" id="goodDisp">–</span> good&nbsp; ·&nbsp; <span class="se" id="evilDisp">–</span> evil</div>
-        <button id="evilPlus">+</button>
-      </div>
-      <div class="hint" id="genericHint">How many evil players. Sets how many generic Loyal Servants vs Minions fill the non-special seats.</div>
-    </div>
-
-    <div class="field" id="previewField">
-      <label>Roles in play (<span id="pvCount">0</span> players)</label>
-      <div class="chips" id="rolePreview"></div>
+      <label>Roles <span class="val-pill" id="compPill">—</span></label>
+      <div class="comp-list" id="compList"></div>
+      <div class="hint" id="compHint">Pick a role for each seat, then Deal to shuffle them out to players.</div>
     </div>
 
     <label style="font-weight:600;margin-bottom:10px;display:block;">Players (<span id="pCount">0</span>)</label>
@@ -315,17 +297,53 @@ const GAME = "avalon";
 // Team sizes / two-fails rule mirrored from the server so the tracker can label
 // quests before/while playing.
 const QUEST_TEAMS = { 5:[2,3,2,3,3], 6:[2,3,4,3,4], 7:[2,3,3,4,4], 8:[3,4,4,5,5], 9:[3,4,4,5,5], 10:[3,4,4,5,5] };
-// Every named role the host can toggle in or out of the game, in priority order
-// (higher-priority roles are kept if a team's special slots run short). Loyal
-// Servant / Minion of Mordred aren't listed — they automatically fill the rest.
-const TOGGLE_ROLES = [
-  { key: "merlin",   name: "Merlin",   desc: "Knows the evil players — except Mordred", team: "good" },
-  { key: "percival", name: "Percival", desc: "Sees Merlin (and Morgana as a decoy)", team: "good" },
-  { key: "assassin", name: "Assassin", desc: "One shot to kill Merlin if good wins 3 quests", team: "evil" },
-  { key: "morgana",  name: "Morgana",  desc: "Appears to Percival as Merlin", team: "evil" },
-  { key: "mordred",  name: "Mordred",  desc: "Evil, but hidden from Merlin", team: "evil" },
-  { key: "oberon",   name: "Oberon",   desc: "Evil, but works alone", team: "evil" },
+// Role options for each seat's dropdown (grouped Good / Evil).
+const ROLE_OPTIONS = [
+  { key: "merlin",   label: "Merlin",             team: "good" },
+  { key: "percival", label: "Percival",           team: "good" },
+  { key: "servant",  label: "Loyal Servant",      team: "good" },
+  { key: "assassin", label: "Assassin",           team: "evil" },
+  { key: "morgana",  label: "Morgana",            team: "evil" },
+  { key: "mordred",  label: "Mordred",            team: "evil" },
+  { key: "oberon",   label: "Oberon",             team: "evil" },
+  { key: "minion",   label: "Minion of Mordred",  team: "evil" },
 ];
+const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map(r => [r.key, r.label]));
+const ROLE_TEAM  = Object.fromEntries(ROLE_OPTIONS.map(r => [r.key, r.team]));
+function roleOptionsHtml(sel) {
+  const grp = team => ROLE_OPTIONS.filter(r => r.team === team)
+    .map(r => '<option value="' + r.key + '"' + (r.key === sel ? " selected" : "") + '>' + r.label + '</option>').join("");
+  return '<optgroup label="Good">' + grp("good") + '</optgroup><optgroup label="Evil">' + grp("evil") + '</optgroup>';
+}
+
+// One dropdown per seat; the host sets the line-up, then Deal shuffles it out.
+function renderComp(host) {
+  const comp = state.composition;
+  if (!comp) {
+    $("compList").innerHTML = '<div class="hint">Avalon needs 5–10 players. Waiting for more to join…</div>';
+    $("compPill").textContent = (state.playerCount || 0) + " / 5–10";
+    $("compHint").textContent = "The role line-up appears once you have 5–10 players.";
+    return;
+  }
+  $("compList").innerHTML = comp.map((role, i) =>
+    '<div class="comp-row ' + ROLE_TEAM[role] + '"><span class="cn">' + (i + 1) + '</span>' +
+    '<select class="comp-sel" data-i="' + i + '"' + (host ? "" : " disabled") + '>' + roleOptionsHtml(role) + '</select></div>').join("");
+  $("compPill").textContent = state.goodCount + " good · " + state.evilCount + " evil";
+  if (state.compValid) {
+    $("compHint").innerHTML = host ? "Set the role for each seat, then Deal to shuffle them out to players."
+                                   : "The host is setting the roles…";
+  } else {
+    $("compHint").innerHTML = '<span style="color:var(--danger);font-weight:700">' + escapeHtml(state.compReason || "") + '</span>';
+  }
+}
+
+// Persistent roster of everyone currently in the room (shown in every screen).
+function renderRoomBar() {
+  const list = state.players || [];
+  $("roomBar").innerHTML = '<span class="rb-lbl">In room · ' + list.length + '</span>' +
+    list.map(p => '<span class="rb-chip ' + (p.id === myId() ? "me" : "") + '">' + escapeHtml(p.name) +
+      (p.isHost ? ' <span class="rb-h">★</span>' : '') + '</span>').join("");
+}
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
 const KEY = "qfin_session";
@@ -388,6 +406,9 @@ function showScreen(id) {
   SCREENS.forEach(s => $(s).classList.toggle("hidden", s !== id));
   $("chatPanel").classList.toggle("hidden", id === "home");
   $("leaveFoot").classList.toggle("hidden", id === "home");
+  // The roster strip shows in every in-room screen except the lobby (which has
+  // its own full player list) and home.
+  $("roomBar").classList.toggle("hidden", id === "home" || id === "lobby");
 }
 function amHost() { return state && state.hostId === session.playerId; }
 function myId() { return session.playerId; }
@@ -408,6 +429,7 @@ function render() {
   const questKey = "q" + state.quest + ":" + state.phase;
   if (state.phase === "quest" && questKey !== lastQuestKey) { myCard = null; lastQuestKey = questKey; }
 
+  renderRoomBar();
   if (state.phase === "lobby")       renderLobby();
   else if (state.phase === "roleReveal") renderRole();
   else if (state.phase === "proposal")   renderProposal();
@@ -439,36 +461,7 @@ function renderLobby() {
   $("voteRange").value = s.voteSeconds;    $("voteVal").textContent = fmtClock(s.voteSeconds);
   $("propRange").disabled = $("voteRange").disabled = !host;
 
-  $("roleToggles").innerHTML = TOGGLE_ROLES.map(r =>
-    '<div class="toggle"><div class="tinfo"><b class="tn-' + r.team + '">' + r.name +
-    '</b><span>' + r.desc + '</span></div>' +
-    '<label class="switch"><input type="checkbox" data-role="' + r.key + '"' +
-    (s.roles[r.key] ? " checked" : "") + (host ? "" : " disabled") + '><span class="slider"></span></label></div>').join("");
-
-  $("pvCount").textContent = state.playerCount || (state.players || []).length;
-  $("rolePreview").innerHTML = (state.rolePreview || [])
-    .map(lbl => '<span class="chip ' + (/(Assassin|Morgana|Mordred|Oberon|Minion)/.test(lbl) ? "evil" : "good") + '">' + escapeHtml(lbl) + '</span>').join("")
-    || '<span class="hint">Need 5–10 players.</span>';
-
-  // team balance stepper (how many evil -> good = the rest -> generic fillers)
-  const hasCount = typeof state.evilCount === "number";
-  $("goodDisp").textContent = hasCount ? state.goodCount : "–";
-  $("evilDisp").textContent = hasCount ? state.evilCount : "–";
-  $("balancePill").textContent = hasCount ? (state.evilAuto ? "standard" : "custom") : "—";
-  if (hasCount) {
-    const gg = state.genericGood, ge = state.genericEvil;
-    $("genericHint").innerHTML =
-      'Generic fillers: <span style="color:var(--good);font-weight:700">' + gg + '</span> Loyal Servant' + (gg === 1 ? "" : "s") +
-      ' · <span style="color:var(--danger);font-weight:700">' + ge + '</span> Minion' + (ge === 1 ? "" : "s") +
-      (state.evilAuto ? "" : ' · <a href="#" id="evilReset">reset to standard</a>');
-    const reset = $("evilReset");
-    if (reset) reset.onclick = e => { e.preventDefault(); if (amHost()) sendMsg({ type: "settings", evilCount: null }); };
-  } else {
-    $("genericHint").textContent = "How many evil players — available once you have 5–10 players.";
-  }
-  const canEdit = host && hasCount;
-  $("evilMinus").disabled = !canEdit || state.evilCount <= (state.evilMin || 1);
-  $("evilPlus").disabled = !canEdit || state.evilCount >= (state.evilMax || (state.playerCount - 1));
+  renderComp(host);
 
   $("pCount").textContent = state.players.length;
   $("playerList").innerHTML = state.players.map(p =>
@@ -478,9 +471,10 @@ function renderLobby() {
   $("startBtn").classList.toggle("hidden", !host);
   $("waitHint").classList.toggle("hidden", host);
   if (host) {
-    const ok = state.canStart;
-    $("startBtn").disabled = !ok;
-    $("startBtn").textContent = ok ? "Deal roles" : "Need 5–10 players (" + (state.playerCount || 0) + ")";
+    const inRange = (state.playerCount || 0) >= 5 && (state.playerCount || 0) <= 10;
+    $("startBtn").disabled = !state.canStart;
+    $("startBtn").textContent = !inRange ? "Need 5–10 players (" + (state.playerCount || 0) + ")"
+      : state.canStart ? "Deal roles 🎲" : "Fix the role line-up";
   }
 }
 
@@ -703,16 +697,16 @@ function tickClock() {
 function fmtClock(secs) { const m = Math.floor(secs / 60), s = secs % 60; return m + ":" + String(s).padStart(2, "0"); }
 
 // ---- settings (host) ----
-$("propRange").oninput = e => { $("propVal").textContent = fmtClock(+e.target.value); if (amHost()) pushSettings(); };
-$("voteRange").oninput = e => { $("voteVal").textContent = fmtClock(+e.target.value); if (amHost()) pushSettings(); };
-$("roleToggles").onchange = () => { if (amHost()) pushSettings(); };
-$("evilMinus").onclick = () => { if (!amHost() || typeof state.evilCount !== "number") return; const v = state.evilCount; if (v > (state.evilMin || 1)) sendMsg({ type: "settings", evilCount: v - 1 }); };
-$("evilPlus").onclick  = () => { if (!amHost() || typeof state.evilCount !== "number") return; const v = state.evilCount; if (v < (state.evilMax || (state.playerCount - 1))) sendMsg({ type: "settings", evilCount: v + 1 }); };
-function pushSettings() {
-  const roles = {};
-  document.querySelectorAll('#roleToggles input[data-role]').forEach(c => { roles[c.getAttribute("data-role")] = c.checked; });
-  sendMsg({ type: "settings", proposeSeconds: +$("propRange").value, voteSeconds: +$("voteRange").value, roles });
-}
+$("propRange").oninput = e => { $("propVal").textContent = fmtClock(+e.target.value); if (amHost()) pushTimers(); };
+$("voteRange").oninput = e => { $("voteVal").textContent = fmtClock(+e.target.value); if (amHost()) pushTimers(); };
+function pushTimers() { sendMsg({ type: "settings", proposeSeconds: +$("propRange").value, voteSeconds: +$("voteRange").value }); }
+
+// When any seat's dropdown changes, send the whole line-up.
+$("compList").onchange = e => {
+  if (!amHost() || !e.target.classList.contains("comp-sel")) return;
+  const comp = [...document.querySelectorAll("#compList .comp-sel")].map(sel => sel.value);
+  sendMsg({ type: "settings", composition: comp });
+};
 
 $("startBtn").onclick = () => sendMsg({ type: "start" });
 
