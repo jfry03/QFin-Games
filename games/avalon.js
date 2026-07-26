@@ -61,22 +61,25 @@ function shuffle(a) {
   return arr;
 }
 
+// Every named role the host can toggle in or out, in priority order per team.
+// (Loyal Servant and Minion are automatic fillers — never toggled.)
+const GOOD_TOGGLES = ["merlin", "percival"];
+const EVIL_TOGGLES = ["assassin", "morgana", "mordred", "oberon"];
+
 // The exact list of roles that will be dealt for `n` players under `settings`.
-// Enabled optional evil roles beyond the evil count are dropped (Assassin has
-// priority); good fills with Merlin (+ Percival if enabled) then Loyal Servants.
+// Enabled special roles beyond a team's count are dropped in priority order
+// (higher priority kept); each team fills the rest with Loyal Servants / Minions.
 function buildRoleList(n, settings) {
   const evilCount = EVIL_COUNT[n];
   const goodCount = n - evilCount;
 
-  const evil = ["assassin"];
-  for (const r of ["morgana", "mordred", "oberon"]) if (settings.roles[r]) evil.push(r);
-  evil.length = Math.min(evil.length, evilCount);
-  while (evil.length < evilCount) evil.push("minion");
-
-  const good = ["merlin"];
-  if (settings.roles.percival) good.push("percival");
+  const good = GOOD_TOGGLES.filter(r => settings.roles[r]);
   good.length = Math.min(good.length, goodCount);
   while (good.length < goodCount) good.push("servant");
+
+  const evil = EVIL_TOGGLES.filter(r => settings.roles[r]);
+  evil.length = Math.min(evil.length, evilCount);
+  while (evil.length < evilCount) evil.push("minion");
 
   return { roles: [...good, ...evil], evilCount, goodCount };
 }
@@ -98,7 +101,9 @@ module.exports = (api) => {
       settings: {
         proposeSeconds: 90,   // nomination time limit
         voteSeconds: 60,      // voting window once a team is nominated
-        roles: { percival: true, morgana: true, mordred: false, oberon: false },
+        // Which named roles are dealt. Merlin + Assassin are on by default (they
+        // are the heart of the game) but the host may toggle any of them.
+        roles: { merlin: true, percival: true, assassin: true, morgana: true, mordred: false, oberon: false },
       },
       order: [],            // seat order (playerIds), fixed for the game
       leaderIndex: 0,
@@ -264,7 +269,7 @@ module.exports = (api) => {
     const vs = parseInt(msg.voteSeconds, 10);
     if (vs >= 15 && vs <= 600) s.voteSeconds = vs;
     if (msg.roles && typeof msg.roles === "object") {
-      for (const r of ["percival", "morgana", "mordred", "oberon"])
+      for (const r of [...GOOD_TOGGLES, ...EVIL_TOGGLES])
         if (typeof msg.roles[r] === "boolean") s.roles[r] = msg.roles[r];
     }
     broadcastState(room);

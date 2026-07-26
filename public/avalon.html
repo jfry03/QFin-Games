@@ -139,21 +139,8 @@
   .switch input:checked + .slider { background: var(--good); }
   .switch input:checked + .slider:before { transform: translateX(20px); }
   .switch input:disabled + .slider { opacity: 0.5; }
-  /* all-roles reference */
-  .roles-ref { background: var(--card); border-radius: 12px; padding: 4px 14px; margin-bottom: 8px; }
-  .roles-ref summary { cursor: pointer; padding: 10px 0; font-weight: 700; list-style: none; }
-  .roles-ref summary::-webkit-details-marker { display: none; }
-  .roles-ref summary:after { content: "＋"; float: right; color: var(--muted); }
-  .roles-ref[open] summary:after { content: "－"; }
-  .ref-list { display: flex; flex-direction: column; gap: 10px; padding: 6px 0 12px; }
-  .ref-row { font-size: 0.88rem; line-height: 1.4; }
-  .ref-row .rname { font-weight: 800; }
-  .ref-row .rteam { font-size: 0.68rem; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; padding: 1px 7px; border-radius: 999px; margin-left: 6px; vertical-align: middle; }
-  .ref-row .rteam.good { color: var(--good); background: rgba(29,209,161,0.16); }
-  .ref-row .rteam.evil { color: var(--danger); background: rgba(255,107,107,0.16); }
-  .ref-row.good .rname { color: var(--good); }
-  .ref-row.evil .rname { color: var(--danger); }
-  .ref-row .rdesc { color: var(--muted); display: block; margin-top: 2px; }
+  .toggle .tinfo b.tn-good { color: var(--good); }
+  .toggle .tinfo b.tn-evil { color: var(--danger); }
 </style>
 </head>
 <body>
@@ -196,17 +183,9 @@
     </div>
 
     <div class="field">
-      <label>Optional roles</label>
+      <label>Roles</label>
       <div class="toggle-list" id="roleToggles"></div>
-      <div class="hint">Merlin &amp; the Assassin are always in. Extra evil roles beyond the evil count are dropped.</div>
-    </div>
-
-    <div class="field">
-      <label>All roles</label>
-      <details class="roles-ref">
-        <summary>What every role does</summary>
-        <div class="ref-list" id="refList"></div>
-      </details>
+      <div class="hint">Toggle each role in or out. Any seats not given a special role become Loyal Servants (good) / Minions of Mordred (evil). Specials beyond a team's count are dropped.</div>
     </div>
 
     <div class="field" id="previewField">
@@ -320,30 +299,17 @@ const GAME = "avalon";
 // Team sizes / two-fails rule mirrored from the server so the tracker can label
 // quests before/while playing.
 const QUEST_TEAMS = { 5:[2,3,2,3,3], 6:[2,3,4,3,4], 7:[2,3,3,4,4], 8:[3,4,4,5,5], 9:[3,4,4,5,5], 10:[3,4,4,5,5] };
-const OPT_ROLES = [
+// Every named role the host can toggle in or out of the game, in priority order
+// (higher-priority roles are kept if a team's special slots run short). Loyal
+// Servant / Minion of Mordred aren't listed — they automatically fill the rest.
+const TOGGLE_ROLES = [
+  { key: "merlin",   name: "Merlin",   desc: "Knows the evil players — except Mordred", team: "good" },
   { key: "percival", name: "Percival", desc: "Sees Merlin (and Morgana as a decoy)", team: "good" },
+  { key: "assassin", name: "Assassin", desc: "One shot to kill Merlin if good wins 3 quests", team: "evil" },
   { key: "morgana",  name: "Morgana",  desc: "Appears to Percival as Merlin", team: "evil" },
-  { key: "mordred",  name: "Mordred",  desc: "Hidden from Merlin", team: "evil" },
+  { key: "mordred",  name: "Mordred",  desc: "Evil, but hidden from Merlin", team: "evil" },
   { key: "oberon",   name: "Oberon",   desc: "Evil, but works alone", team: "evil" },
 ];
-// Every role in the game, for the lobby reference list.
-const ALL_ROLES = [
-  { name: "Merlin", team: "good", always: true, desc: "Knows who the evil players are — but Mordred is hidden from him. Must guide good without being obvious, or the Assassin will kill him." },
-  { name: "Percival", team: "good", desc: "Sees Merlin — but Morgana looks identical. Works out which is real and shields the true Merlin." },
-  { name: "Loyal Servant of Arthur", team: "good", desc: "Knows nothing for certain. Deduces from how quests go and who nominates whom." },
-  { name: "Assassin", team: "evil", always: true, desc: "If good passes three quests, gets one shot to name Merlin. Guess right and evil steals the game." },
-  { name: "Morgana", team: "evil", desc: "Appears to Percival as Merlin, muddying who the real Merlin is." },
-  { name: "Mordred", team: "evil", desc: "Hidden from Merlin — Merlin does not know Mordred is evil." },
-  { name: "Oberon", team: "evil", desc: "Evil, but works alone: doesn't know the other minions, and they don't know him." },
-  { name: "Minion of Mordred", team: "evil", desc: "A generic evil player. Sabotages quests and stays hidden." },
-];
-function renderRolesRef() {
-  $("refList").innerHTML = ALL_ROLES.map(r =>
-    '<div class="ref-row ' + r.team + '"><span class="rname">' + r.name + '</span>' +
-    '<span class="rteam ' + r.team + '">' + (r.team === "evil" ? "Evil" : "Good") + '</span>' +
-    (r.always ? '<span class="rteam" style="color:var(--gold);background:rgba(246,196,83,0.16)">Always</span>' : '') +
-    '<span class="rdesc">' + r.desc + '</span></div>').join("");
-}
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
 const KEY = "qfin_session";
@@ -457,8 +423,9 @@ function renderLobby() {
   $("voteRange").value = s.voteSeconds;    $("voteVal").textContent = fmtClock(s.voteSeconds);
   $("propRange").disabled = $("voteRange").disabled = !host;
 
-  $("roleToggles").innerHTML = OPT_ROLES.map(r =>
-    '<div class="toggle"><div class="tinfo"><b>' + r.name + '</b><span>' + r.desc + '</span></div>' +
+  $("roleToggles").innerHTML = TOGGLE_ROLES.map(r =>
+    '<div class="toggle"><div class="tinfo"><b class="tn-' + r.team + '">' + r.name +
+    '</b><span>' + r.desc + '</span></div>' +
     '<label class="switch"><input type="checkbox" data-role="' + r.key + '"' +
     (s.roles[r.key] ? " checked" : "") + (host ? "" : " disabled") + '><span class="slider"></span></label></div>').join("");
 
@@ -736,7 +703,6 @@ $("leaveBtn").onclick = doLeave;
 $("leaveLink").onclick = doLeave;
 
 if (session.name) $("nameInput").value = session.name;
-renderRolesRef();
 showScreen("home");
 connect();
 </script>
