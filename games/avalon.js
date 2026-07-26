@@ -66,11 +66,18 @@ function shuffle(a) {
 const GOOD_TOGGLES = ["merlin", "percival"];
 const EVIL_TOGGLES = ["assassin", "morgana", "mordred", "oberon"];
 
+// How many evil players for `n` under `settings`: the host's override if set,
+// otherwise the standard table. Always clamped to leave at least one of each side.
+function effectiveEvil(n, settings) {
+  const base = settings.evilCount == null ? (EVIL_COUNT[n] || 2) : settings.evilCount;
+  return Math.max(1, Math.min(n - 1, base));
+}
+
 // The exact list of roles that will be dealt for `n` players under `settings`.
 // Enabled special roles beyond a team's count are dropped in priority order
 // (higher priority kept); each team fills the rest with Loyal Servants / Minions.
 function buildRoleList(n, settings) {
-  const evilCount = EVIL_COUNT[n];
+  const evilCount = effectiveEvil(n, settings);
   const goodCount = n - evilCount;
 
   const good = GOOD_TOGGLES.filter(r => settings.roles[r]);
@@ -104,6 +111,10 @@ module.exports = (api) => {
         // Which named roles are dealt. Merlin + Assassin are on by default (they
         // are the heart of the game) but the host may toggle any of them.
         roles: { merlin: true, percival: true, assassin: true, morgana: true, mordred: false, oberon: false },
+        // Number of evil players. null = use the standard player-count table;
+        // set it to override the good/evil balance (and thus how many generic
+        // Loyal Servants vs Minions of Mordred there are).
+        evilCount: null,
       },
       order: [],            // seat order (playerIds), fixed for the game
       leaderIndex: 0,
@@ -209,7 +220,20 @@ module.exports = (api) => {
       st.playerCount = c;
       st.canStart = ok;
       st.teamSizes = ok ? QUEST_TEAMS[c] : null;
-      st.rolePreview = ok ? buildRoleList(c, g.settings).roles.map(r => ROLE_META[r].label) : null;
+      st.evilAuto = g.settings.evilCount == null;
+      if (ok) {
+        const list = buildRoleList(c, g.settings).roles;
+        const evil = effectiveEvil(c, g.settings);
+        st.rolePreview = list.map(r => ROLE_META[r].label);
+        st.evilCount = evil;
+        st.goodCount = c - evil;
+        st.genericGood = list.filter(r => r === "servant").length;   // Loyal Servants
+        st.genericEvil = list.filter(r => r === "minion").length;    // Minions of Mordred
+        st.evilMin = 1;
+        st.evilMax = c - 1;
+      } else {
+        st.rolePreview = null;
+      }
     }
     if (room.phase === "proposal" || room.phase === "teamVote" || room.phase === "voteReveal") {
       st.leaderId = g.order[g.leaderIndex];
@@ -271,6 +295,11 @@ module.exports = (api) => {
     if (msg.roles && typeof msg.roles === "object") {
       for (const r of [...GOOD_TOGGLES, ...EVIL_TOGGLES])
         if (typeof msg.roles[r] === "boolean") s.roles[r] = msg.roles[r];
+    }
+    if ("evilCount" in msg) {
+      // null / "auto" restores the standard table; a number overrides it.
+      if (msg.evilCount == null || msg.evilCount === "auto") s.evilCount = null;
+      else { const e = parseInt(msg.evilCount, 10); if (e >= 1 && e <= 9) s.evilCount = e; }
     }
     broadcastState(room);
   }

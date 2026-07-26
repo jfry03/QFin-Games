@@ -203,8 +203,30 @@ function testAvalonTimers() {
   ok(room.phase === "result" && room.g.result.winner === "evil", "5 rejects in a row -> evil wins");
 }
 
+function testAvalonBalance() {
+  console.log("Avalon team balance override (backend):");
+  const { game } = harness(require(path.join(ROOT, "games/avalon")), "avalon");
+  const room = makeRoom(game, "avalon");
+  const ps = ["a", "b", "c", "d", "e"].map(n => join(room, game, n));
+  const host = ps[0].ws;
+  game.onMessage(host, { type: "settings" }, room); // trigger a broadcast
+  let st = game.publicState(room);
+  ok(st.evilCount === 2 && st.goodCount === 3 && st.evilAuto === true, "n=5 default is 2 evil / 3 good (auto)");
+  game.onMessage(host, { type: "settings", evilCount: 3 }, room);
+  st = game.publicState(room);
+  ok(st.evilCount === 3 && st.goodCount === 2 && st.evilAuto === false, "override -> 3 evil / 2 good");
+  game.onMessage(host, { type: "start" }, room);
+  ok(ps.filter(p => p.team === "evil").length === 3, "deals 3 evil when overridden");
+  game.onMessage(host, { type: "lobby" }, room);
+  game.onMessage(host, { type: "settings", evilCount: 9 }, room);
+  ok(game.publicState(room).evilCount === 4, "evil count clamps to n-1");
+  game.onMessage(host, { type: "settings", evilCount: null }, room);
+  ok(game.publicState(room).evilAuto === true, "null restores the standard table");
+}
+
 testImposter();
 testAvalon();
 testAvalonTimers();
+testAvalonBalance();
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
