@@ -293,6 +293,10 @@
 <script>
 const $ = id => document.getElementById(id);
 const GAME = "avalon";
+function escapeHtml(s) {
+  return String(s).replace(/[&<>"']/g, c =>
+    ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
 
 // Team sizes / two-fails rule mirrored from the server so the tracker can label
 // quests before/while playing.
