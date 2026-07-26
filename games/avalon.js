@@ -29,6 +29,8 @@ const ROLE_META = {
   merlin:   { team: "good", label: "Merlin" },
   percival: { team: "good", label: "Percival" },
   servant:  { team: "good", label: "Loyal Servant of Arthur" },
+  drunkpercival:     { team: "good", label: "Drunk Percival" },
+  unreliableservant: { team: "good", label: "Unreliable Loyal Servant" },
   assassin: { team: "evil", label: "Assassin" },
   morgana:  { team: "evil", label: "Morgana" },
   mordred:  { team: "evil", label: "Mordred" },
@@ -39,6 +41,9 @@ const ROLE_BLURB = {
   merlin:   "You know who the evil players are — but Mordred is hidden from you. Guide good subtly: if evil identifies you, the Assassin will kill you at the end.",
   percival: "You can see Merlin — but Morgana looks just like him. Work out which is real and protect them.",
   servant:  "A loyal servant of Arthur. You know nothing for certain — reason from how the quests go.",
+  // The Drunk Percival never sees this blurb — they're shown Percival's instead.
+  drunkpercival: "You think you're Percival, but the two you see are random — your info can't be trusted.",
+  unreliableservant: "A loyal servant of Arthur — but shaky. On the first two quests your success card has a 1-in-3 chance of coming out as a FAIL, and you won't know when.",
   assassin: "A minion of Mordred. If good passes three quests, you get one shot to name Merlin and steal the win.",
   morgana:  "A minion of Mordred who appears to Percival as Merlin. Sow confusion.",
   mordred:  "A minion of Mordred hidden from Merlin — Merlin does not know you are evil.",
@@ -67,7 +72,7 @@ function shuffle(a) {
 // The host builds an explicit line-up: one role per seat (= per player), chosen
 // from dropdowns, then the roles are shuffled out to players when dealt. Special
 // roles may appear at most once; Loyal Servant / Minion are unlimited fillers.
-const SPECIAL_ROLES = ["merlin", "percival", "assassin", "morgana", "mordred", "oberon"];
+const SPECIAL_ROLES = ["merlin", "percival", "drunkpercival", "unreliableservant", "assassin", "morgana", "mordred", "oberon"];
 const ALL_ROLE_KEYS = [...SPECIAL_ROLES, "servant", "minion"];
 
 // A sensible starting line-up for `n` players — the host can change every seat.
@@ -186,6 +191,11 @@ module.exports = (api) => {
         const cands = shuffle([merlinId, morganaId].filter(Boolean));
         p.seesLabel = morganaId ? "Merlin — but one of these is the impostor Morgana" : "Merlin";
         p.knows = cands.map(c => ({ id: c, note: "Merlin?" }));
+      } else if (role === "drunkpercival") {
+        // Thinks they're Percival, but sees two RANDOM players (bad info).
+        const two = shuffle(order.filter(x => x !== id)).slice(0, 2);
+        p.seesLabel = "Merlin — but one of these is the impostor Morgana";
+        p.knows = two.map(c => ({ id: c, note: "Merlin?" }));
       } else if (role === "oberon") {
         p.seesLabel = null;
         p.knows = [];
@@ -204,12 +214,15 @@ module.exports = (api) => {
 
   function roleMessage(room, player) {
     const meta = ROLE_META[player.role];
+    // The Drunk Percival is shown the ordinary Percival card so they don't know
+    // their sight is unreliable.
+    const disguised = player.role === "drunkpercival";
     return {
       type: "role",
-      role: player.role,
-      roleLabel: meta.label,
+      role: disguised ? "percival" : player.role,
+      roleLabel: disguised ? "Percival" : meta.label,
       team: meta.team,
-      blurb: ROLE_BLURB[player.role],
+      blurb: disguised ? ROLE_BLURB.percival : ROLE_BLURB[player.role],
       seesLabel: player.seesLabel,
       sees: (player.knows || []).map(k => ({ name: nameOf(room, k.id), note: k.note })),
     };
@@ -525,7 +538,12 @@ module.exports = (api) => {
     if (!g.team.includes(ws.playerId)) return;      // only team members
     const player = room.players.get(ws.playerId);
     // Good players cannot sabotage — their card is always a success.
-    const success = player.team === "good" ? true : !!msg.success;
+    let success = player.team === "good" ? true : !!msg.success;
+    // The Unreliable Loyal Servant: on the first two quests a success has a
+    // hidden 1-in-3 chance of coming out as a fail. They aren't told.
+    if (player.role === "unreliableservant" && g.quest < 2 && success && Math.random() < 1 / 3) {
+      success = false;
+    }
     g.cards[ws.playerId] = success;
     const pending = g.team.filter(id => room.players.get(id)?.connected && !(id in g.cards));
     if (pending.length === 0) resolveQuest(room);

@@ -392,14 +392,16 @@ function escapeHtml(s) {
 const QUEST_TEAMS = { 5:[2,3,2,3,3], 6:[2,3,4,3,4], 7:[2,3,3,4,4], 8:[3,4,4,5,5], 9:[3,4,4,5,5], 10:[3,4,4,5,5] };
 // Role options for each seat's dropdown (grouped Good / Evil).
 const ROLE_OPTIONS = [
-  { key: "merlin",   label: "Merlin",             team: "good" },
-  { key: "percival", label: "Percival",           team: "good" },
-  { key: "servant",  label: "Loyal Servant",      team: "good" },
-  { key: "assassin", label: "Assassin",           team: "evil" },
-  { key: "morgana",  label: "Morgana",            team: "evil" },
-  { key: "mordred",  label: "Mordred",            team: "evil" },
-  { key: "oberon",   label: "Oberon",             team: "evil" },
-  { key: "minion",   label: "Minion of Mordred",  team: "evil" },
+  { key: "merlin",            label: "Merlin",                   team: "good" },
+  { key: "percival",          label: "Percival",                 team: "good" },
+  { key: "drunkpercival",     label: "Drunk Percival",           team: "good" },
+  { key: "unreliableservant", label: "Unreliable Loyal Servant", team: "good" },
+  { key: "servant",           label: "Loyal Servant",            team: "good" },
+  { key: "assassin",          label: "Assassin",                 team: "evil" },
+  { key: "morgana",           label: "Morgana",                  team: "evil" },
+  { key: "mordred",           label: "Mordred",                  team: "evil" },
+  { key: "oberon",            label: "Oberon",                   team: "evil" },
+  { key: "minion",            label: "Minion of Mordred",        team: "evil" },
 ];
 const ROLE_LABEL = Object.fromEntries(ROLE_OPTIONS.map(r => [r.key, r.label]));
 const ROLE_TEAM  = Object.fromEntries(ROLE_OPTIONS.map(r => [r.key, r.team]));
