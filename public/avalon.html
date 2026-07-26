@@ -61,6 +61,16 @@
   .players { display: flex; flex-direction: column; gap: 10px; margin-bottom: 8px; }
   .prow { display: flex; align-items: center; justify-content: space-between; background: var(--card); padding: 14px 16px; border-radius: 14px; }
   .prow .tag { color: var(--gold); font-size: 0.75rem; font-weight: 700; }
+  .prow .rside { display: flex; align-items: center; gap: 8px; }
+  .prow.off { opacity: 0.55; }
+  .prow .drop { font-size: 0.72rem; color: var(--muted); font-style: italic; }
+  .link-btn { border: 1px solid var(--accent2); background: transparent; color: var(--accent2); font-size: 0.75rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+  .kick-btn { border: 1px solid var(--danger); background: transparent; color: var(--danger); font-size: 0.75rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer; }
+  .link-btn:active, .kick-btn:active { transform: scale(0.96); }
+  .host-badge { background: rgba(246,196,83,0.16); color: var(--gold); border: 1px solid var(--gold); border-radius: 12px; padding: 10px 14px; font-size: 0.86rem; font-weight: 700; text-align: center; margin-bottom: 16px; }
+  .roombar .rb-chip.off { opacity: 0.55; }
+  .roombar .rb-off { color: var(--danger); }
+  .roombar .rb-act { border: none; cursor: pointer; font-family: inherit; }
   .prow.me { border: 1.5px solid var(--accent2); }
   .prow.leader { border: 1.5px solid var(--gold); }
   .prow.sel { border: 1.5px solid var(--good); background: rgba(29,209,161,0.14); }
@@ -173,6 +183,7 @@
       <div class="lbl">Room code</div>
       <div class="code" id="lobbyCode">····</div>
     </div>
+    <div class="host-badge hidden" id="hostBadge">👑 You're the host — you set the roles, deal, and manage players.</div>
 
     <div class="field">
       <label>Nomination time limit <span class="val-pill" id="propVal">1:30</span></label>
@@ -341,13 +352,28 @@ function renderComp(host) {
   }
 }
 
-// Persistent roster of everyone currently in the room (shown in every screen).
+// Persistent roster of everyone in the room (shown in every in-game screen).
+// The host can tap any other player to copy a reconnect link — handy when
+// someone drops mid-game (they show with a ⚠).
 function renderRoomBar() {
-  const list = state.players || [];
-  $("roomBar").innerHTML = '<span class="rb-lbl">In room · ' + list.length + '</span>' +
-    list.map(p => '<span class="rb-chip ' + (p.id === myId() ? "me" : "") + '">' + escapeHtml(p.name) +
-      (p.isHost ? ' <span class="rb-h">★</span>' : '') + '</span>').join("");
+  const host = amHost();
+  const roster = state.roster || state.players || [];
+  const connCount = roster.filter(p => p.connected !== false).length;
+  $("roomBar").innerHTML = '<span class="rb-lbl">In room · ' + connCount + '</span>' +
+    roster.map(p => {
+      const me = p.id === myId(), off = p.connected === false;
+      const inner = escapeHtml(p.name) + (p.isHost ? ' <span class="rb-h">★</span>' : '') + (off ? ' <span class="rb-off">⚠</span>' : '');
+      if (host && !me) return '<button class="rb-chip rb-act ' + (off ? "off" : "") + '" data-link="' + p.id + '" title="Copy reconnect link">' + inner + ' 🔗</button>';
+      return '<span class="rb-chip ' + (me ? "me" : "") + ' ' + (off ? "off" : "") + '">' + inner + '</span>';
+    }).join("");
 }
+$("roomBar").onclick = e => {
+  const b = e.target.closest("[data-link]");
+  if (!b || !amHost()) return;
+  const id = b.getAttribute("data-link");
+  const p = (state.roster || []).find(x => x.id === id);
+  copyRejoin(id, p ? p.name : "player");
+};
 
 // Per-tab session so a screen-lock/refresh rejoins, but a new tab starts fresh.
 const KEY = "qfin_session";
@@ -355,6 +381,26 @@ let session = {};
 try { session = JSON.parse(sessionStorage.getItem(KEY) || "{}"); } catch {}
 function saveSession() { sessionStorage.setItem(KEY, JSON.stringify(session)); }
 function clearSession() { session = {}; sessionStorage.removeItem(KEY); }
+
+// Reconnect link (?code=XXXX&pid=YYY): adopt that player and rejoin as them, so
+// someone who closed the tab can get back into their exact spot via a link the
+// host shares.
+(function () {
+  const q = new URLSearchParams(location.search);
+  const code = q.get("code"), pid = q.get("pid");
+  if (code && pid) {
+    session.code = code.toUpperCase(); session.playerId = pid; session.game = GAME;
+    saveSession();
+    history.replaceState({}, "", location.pathname);
+  }
+})();
+function rejoinLink(id) { return location.origin + "/" + GAME + "?code=" + state.code + "&pid=" + id; }
+function copyRejoin(id, name) {
+  const url = rejoinLink(id);
+  const done = () => banner("Reconnect link for " + name + " copied — send it to them.");
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(url).then(done, () => prompt("Reconnect link for " + name + ":", url));
+  else prompt("Reconnect link for " + name + ":", url);
+}
 
 let state = null, ws = null, reconnectTimer = null;
 let myRole = null;          // private { role, roleLabel, team, blurb, seesLabel, sees[] }
@@ -397,6 +443,11 @@ function onMessage(msg) {
     case "role":
       myRole = msg; roleShown = false;
       if (state && state.phase === "roleReveal") renderRole();
+      break;
+    case "kicked":
+      clearSession(); state = null; myRole = null;
+      banner(msg.message || "You were removed from the room.");
+      showScreen("home");
       break;
     case "error":
       banner(msg.message);
@@ -468,9 +519,21 @@ function renderLobby() {
   renderComp(host);
 
   $("pCount").textContent = state.players.length;
-  $("playerList").innerHTML = state.players.map(p =>
-    '<div class="prow ' + (p.id === myId() ? "me" : "") + '"><span>' + escapeHtml(p.name) +
-    (p.id === myId() ? " (you)" : "") + '</span>' + (p.isHost ? '<span class="tag">HOST</span>' : "") + '</div>').join("");
+  $("hostBadge").classList.toggle("hidden", !host);
+  const roster = state.roster || state.players;
+  $("playerList").innerHTML = roster.map(p => {
+    const me = p.id === myId();
+    let right = "";
+    if (p.isHost) right += '<span class="tag">HOST</span>';
+    if (p.connected === false) right += '<span class="drop">reconnecting…</span>';
+    if (host && !me) {
+      right += '<button class="link-btn" data-link="' + p.id + '">Link</button>';
+      right += '<button class="kick-btn" data-kick="' + p.id + '">Remove</button>';
+    }
+    return '<div class="prow ' + (me ? "me" : "") + ' ' + (p.connected === false ? "off" : "") + '">' +
+      '<span>' + escapeHtml(p.name) + (me ? " (you)" : "") + '</span>' +
+      '<span class="rside">' + right + '</span></div>';
+  }).join("");
 
   $("startBtn").classList.toggle("hidden", !host);
   $("waitHint").classList.toggle("hidden", host);
@@ -713,6 +776,15 @@ $("compList").onchange = e => {
 };
 
 $("startBtn").onclick = () => sendMsg({ type: "start" });
+
+// host tools on the lobby player list: reconnect link + remove
+$("playerList").onclick = e => {
+  if (!amHost()) return;
+  const link = e.target.closest("[data-link]"), kick = e.target.closest("[data-kick]");
+  const roster = state.roster || state.players || [];
+  if (link) { const id = link.getAttribute("data-link"); const p = roster.find(x => x.id === id); copyRejoin(id, p ? p.name : "player"); return; }
+  if (kick) { const id = kick.getAttribute("data-kick"); const p = roster.find(x => x.id === id); if (confirm("Remove " + (p ? p.name : "this player") + " from the room?")) sendMsg({ type: "kick", target: id }); }
+};
 
 // ---- home actions ----
 $("createBtn").onclick = () => {

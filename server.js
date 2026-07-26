@@ -99,6 +99,10 @@ function baseState(room) {
     players: [...room.players.values()]
       .filter(p => p.connected)
       .map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId })),
+    // Everyone in the room, including players who dropped (connected: false), so
+    // the host can see who's missing and hand them a reconnect link.
+    roster: [...room.players.values()]
+      .map(p => ({ id: p.id, name: p.name, isHost: p.id === room.hostId, connected: p.connected })),
     chat: room.chat.slice(-60),
   };
 }
@@ -147,6 +151,7 @@ function handle(ws, msg) {
     case "join":   return onJoin(ws, { name: msg.name, code: msg.code, playerId: msg.playerId });
     case "rejoin": return onJoin(ws, { code: msg.code, playerId: msg.playerId, rejoinOnly: true });
     case "chat":   return onChat(ws, msg);
+    case "kick":   return onKick(ws, msg);
     case "leave":  return onLeave(ws);
     default: {
       // Everything else is game-specific.
@@ -210,6 +215,24 @@ function onLeave(ws) {
   const room = roomFor(ws);
   if (!room) return;
   room.players.delete(ws.playerId);
+  ensureHost(room);
+  if (room.game.onPlayerGone) room.game.onPlayerGone(room);
+  broadcastState(room);
+  destroyIfEmpty(room);
+}
+
+// Host removes another player from the room. The kicked player's client is told
+// so it can drop its session (otherwise it would just auto-rejoin).
+function onKick(ws, msg) {
+  const room = roomFor(ws);
+  if (!isHost(ws, room)) return;
+  const target = msg.target;
+  if (!target || target === ws.playerId) return;   // can't kick yourself
+  const player = room.players.get(target);
+  if (!player) return;
+  send(player.ws, { type: "kicked", message: "The host removed you from the room." });
+  if (player.ws) { player.ws.roomCode = null; player.ws.playerId = null; }
+  room.players.delete(target);
   ensureHost(room);
   if (room.game.onPlayerGone) room.game.onPlayerGone(room);
   broadcastState(room);
