@@ -172,6 +172,15 @@
   .footer-note a { color: var(--accent2); }
   .banner { background: var(--danger); color: #fff; padding: 10px 14px; border-radius: 12px; font-size: 0.9rem; margin-bottom: 14px; text-align: center; }
   .status-dot { font-size: 0.75rem; color: var(--muted); text-align: center; margin-top: 10px; }
+  /* quest team sizes */
+  .mini-link { float: right; font-size: 0.8rem; color: var(--accent2); font-weight: 600; }
+  .qsize-row { display: flex; gap: 8px; }
+  .qsize { flex: 1; background: var(--card); border-radius: 12px; padding: 8px 4px; text-align: center; }
+  .qsize .ql { font-size: 0.62rem; letter-spacing: 1px; color: var(--muted); }
+  .qsize .qc { display: flex; align-items: center; justify-content: center; gap: 6px; margin-top: 4px; }
+  .qsize button { width: 24px; height: 24px; border: none; border-radius: 7px; background: var(--card2); color: var(--text); font-size: 1rem; font-weight: 800; cursor: pointer; line-height: 1; padding: 0; }
+  .qsize button:disabled { opacity: 0.35; }
+  .qsize .qv { font-size: 1.1rem; font-weight: 800; min-width: 16px; }
   /* per-seat role line-up */
   .comp-list { display: flex; flex-direction: column; gap: 8px; }
   .comp-row { display: flex; align-items: center; gap: 12px; background: var(--card); border-radius: 12px; padding: 8px 12px; border-left: 4px solid var(--card2); }
@@ -239,6 +248,12 @@
       <label>Time-out length <span class="val-pill" id="chipLenVal">3:00</span></label>
       <input type="range" class="range" id="chipLenRange" min="30" max="600" step="30" value="180">
       <div class="hint">How long each time-out freezes the clock before it auto-resumes.</div>
+    </div>
+
+    <div class="field">
+      <label>Quest team sizes <a href="#" id="qsizeReset" class="mini-link hidden">reset to standard</a></label>
+      <div class="qsize-row" id="qsizeRow"></div>
+      <div class="hint">How many players go on each of the five quests. Defaults to the standard table for your player count.</div>
     </div>
 
     <div class="field">
@@ -410,6 +425,30 @@ function roleOptionsHtml(sel) {
     .map(r => '<option value="' + r.key + '"' + (r.key === sel ? " selected" : "") + '>' + r.label + '</option>').join("");
   return '<optgroup label="Good">' + grp("good") + '</optgroup><optgroup label="Evil">' + grp("evil") + '</optgroup>';
 }
+
+// Five quest team sizes; host tweaks with ±, or resets to the standard table.
+function renderQsize(host) {
+  const sizes = state.teamSizes;
+  if (!sizes) { $("qsizeRow").innerHTML = '<div class="hint">Available with 5–10 players.</div>'; $("qsizeReset").classList.add("hidden"); return; }
+  const n = state.playerCount || 10;
+  $("qsizeRow").innerHTML = sizes.map((sz, i) =>
+    '<div class="qsize"><div class="ql">Q' + (i + 1) + '</div><div class="qc">' +
+    (host ? '<button data-qs="' + i + '" data-d="-1"' + (sz <= 1 ? " disabled" : "") + '>−</button>' : '') +
+    '<span class="qv">' + sz + '</span>' +
+    (host ? '<button data-qs="' + i + '" data-d="1"' + (sz >= n ? " disabled" : "") + '>+</button>' : '') +
+    '</div></div>').join("");
+  const custom = Array.isArray(state.settings && state.settings.questSizes);
+  $("qsizeReset").classList.toggle("hidden", !host || !custom);
+}
+$("qsizeRow").onclick = e => {
+  const b = e.target.closest("[data-qs]"); if (!b || !amHost()) return;
+  const i = +b.getAttribute("data-qs"), d = +b.getAttribute("data-d");
+  const sizes = (state.teamSizes || []).slice();
+  const n = state.playerCount || 10;
+  sizes[i] = Math.max(1, Math.min(n, (sizes[i] || 1) + d));
+  sendMsg({ type: "settings", questSizes: sizes });
+};
+$("qsizeReset").onclick = e => { e.preventDefault(); if (amHost()) sendMsg({ type: "settings", questSizes: null }); };
 
 // One dropdown per seat; the host sets the line-up, then Deal shuffles it out.
 function renderComp(host) {
@@ -699,6 +738,7 @@ function renderLobby() {
   $("propRange").disabled = $("voteRange").disabled = !host;
   $("chipCountRange").disabled = $("chipLenRange").disabled = !host;
 
+  renderQsize(host);
   renderComp(host);
 
   $("pCount").textContent = state.players.length;
@@ -773,7 +813,7 @@ $("roleTabBack").onclick = () => { activeTab = null; render(); };
 // ---- quest tracker + rejects ----
 function trackerHtml() {
   const n = (state.order || []).length;
-  const sizes = QUEST_TEAMS[n] || [2,3,3,4,4];
+  const sizes = state.questSizes || QUEST_TEAMS[n] || [2,3,3,4,4];
   const res = state.questResults || [];
   return '<div class="tracker">' + sizes.map((sz, i) => {
     let cls = "quest-pip";

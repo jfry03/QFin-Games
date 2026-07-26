@@ -123,6 +123,7 @@ module.exports = (api) => {
         composition: null,
         chipCount: CHIPS_PER_GAME,                        // time-out chips per player per game
         chipSeconds: Math.max(1, Math.round(TIMEOUT_MS / 1000)),  // how long a time-out freezes the clock
+        questSizes: null,     // custom team size per quest (5 ints), or null = standard table
       },
       order: [],            // seat order (playerIds), fixed for the game
       leaderIndex: 0,
@@ -239,7 +240,9 @@ module.exports = (api) => {
         voteSeconds: g.settings.voteSeconds,
         chipCount: g.settings.chipCount,
         chipSeconds: g.settings.chipSeconds,
+        questSizes: g.settings.questSizes,   // raw custom sizes (or null)
       },
+      questSizes: g.order.length ? sizesFor(room, g.order.length) : null,   // effective, for the tracker
       order: g.order,
       leaderId: g.order.length ? g.order[g.leaderIndex] : null,
       quest: g.quest,
@@ -255,7 +258,7 @@ module.exports = (api) => {
       const c = connectedPlayers(room).length;
       const ok = c >= MIN_PLAYERS && c <= MAX_PLAYERS;
       st.playerCount = c;
-      st.teamSizes = ok ? QUEST_TEAMS[c] : null;
+      st.teamSizes = ok ? sizesFor(room, c) : null;   // effective sizes for the current count
       if (ok) {
         const comp = getComposition(room);
         const v = validateComposition(comp);
@@ -272,7 +275,7 @@ module.exports = (api) => {
     }
     if (room.phase === "proposal" || room.phase === "teamVote" || room.phase === "voteReveal") {
       st.leaderId = g.order[g.leaderIndex];
-      st.teamSize = QUEST_TEAMS[n] ? QUEST_TEAMS[n][g.quest] : 0;
+      st.teamSize = n ? sizesFor(room, n)[g.quest] : 0;
       st.team = g.team;
     }
     if (room.phase === "proposal" || room.phase === "teamVote") {
@@ -340,6 +343,12 @@ module.exports = (api) => {
     }
     if ("chipCount" in msg) { const c = parseInt(msg.chipCount, 10); if (c >= 0 && c <= 5) s.chipCount = c; }
     if ("chipSeconds" in msg) { const c = parseInt(msg.chipSeconds, 10); if (c >= 30 && c <= 600) s.chipSeconds = c; }
+    if ("questSizes" in msg) {
+      // null resets to the standard table; an array of 5 ints (1..10) customises.
+      if (msg.questSizes == null) s.questSizes = null;
+      else if (Array.isArray(msg.questSizes) && msg.questSizes.length === 5)
+        s.questSizes = msg.questSizes.map(x => { const v = parseInt(x, 10); return (v >= 1 && v <= 10) ? v : 1; });
+    }
     broadcastState(room);
   }
 
@@ -382,7 +391,15 @@ module.exports = (api) => {
   }
 
   function leaderId(room) { return room.g.order[room.g.leaderIndex]; }
-  function teamSize(room) { return QUEST_TEAMS[room.g.order.length][room.g.quest]; }
+  // Effective team size per quest for `n` players: the host's custom sizes if
+  // set (clamped to 1..n), otherwise the standard table.
+  function sizesFor(room, n) {
+    const table = QUEST_TEAMS[n] || [2, 3, 3, 4, 4];
+    const custom = room.g.settings.questSizes;
+    if (!Array.isArray(custom) || custom.length !== 5) return table;
+    return custom.map((s, i) => { const v = parseInt(s, 10); return (v >= 1 && v <= n) ? v : table[i]; });
+  }
+  function teamSize(room) { return sizesFor(room, room.g.order.length)[room.g.quest]; }
 
   function startProposal(room) {
     const g = room.g;
