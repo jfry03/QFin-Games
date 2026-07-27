@@ -33,7 +33,15 @@ const WORDS = {
     ["Clock","Alarm clock","Stopwatch","Timer","Hourglass"],
     ["Envelope","Letter","Postcard","Parcel","Stamp"],
     ["Sofa","Armchair","Stool","Bench","Beanbag"],
-    ["Blender","Whisk","Grater","Peeler","Rolling pin"]
+    ["Blender","Whisk","Grater","Peeler","Rolling pin"],
+    ["Coaster","Placemat","Napkin","Tablecloth","Table runner"],
+    ["Battery","Charger","Power bank","Extension lead","Plug socket"],
+    ["Coat hanger","Clothes peg","Hook","Shelf bracket","Curtain rail"],
+    ["Doormat","Rug","Carpet","Curtain","Blind"],
+    ["Sieve","Colander","Strainer","Funnel","Measuring jug"],
+    ["Ruler","Protractor","Set square","Compass","Calculator"],
+    ["Doorknob","Handle","Hinge","Doorbell","Knocker"],
+    ["Basket","Crate","Box","Chest","Trunk"]
   ],
   "Food": [
     ["Pita","Naan","Flatbread","Calzone","Pizza"],
@@ -57,7 +65,15 @@ const WORDS = {
     ["Bacon","Ham","Sausage","Salami","Pepperoni"],
     ["Almond","Walnut","Cashew","Pistachio","Hazelnut"],
     ["Yogurt","Custard","Pudding","Mousse","Jelly"],
-    ["Chickpea","Lentil","Kidney bean","Black bean","Butter bean"]
+    ["Chickpea","Lentil","Kidney bean","Black bean","Butter bean"],
+    ["Cracker","Rice cake","Breadstick","Wafer","Rusk"],
+    ["Jam","Marmalade","Honey","Syrup","Chocolate spread"],
+    ["Cereal","Granola","Muesli","Porridge","Oatmeal"],
+    ["Soup","Broth","Stew","Curry","Chilli"],
+    ["Milkshake","Smoothie","Juice","Lemonade","Soda"],
+    ["Tofu","Tempeh","Seitan","Halloumi","Paneer"],
+    ["Sausage roll","Pasty","Pie","Quiche","Tart"],
+    ["Fries","Wedges","Hash brown","Tater tot","Mash"]
   ],
   "Animals": [
     ["Lion","Tiger","Jaguar","Cheetah","Leopard"],
@@ -81,7 +97,15 @@ const WORDS = {
     ["Bear","Panda","Sloth","Badger","Wolverine"],
     ["Parrot","Cockatoo","Budgie","Canary","Finch"],
     ["Snail","Slug","Worm","Leech","Caterpillar"],
-    ["Bat","Mole","Hedgehog","Shrew","Vole"]
+    ["Bat","Mole","Hedgehog","Shrew","Vole"],
+    ["Chihuahua","Beagle","Bulldog","Labrador","Great Dane"],
+    ["Housecat","Bobcat","Lynx","Cougar","Panther"],
+    ["Clownfish","Guppy","Goldfish","Angelfish","Betta"],
+    ["Otter","Beaver","Platypus","Muskrat","Capybara"],
+    ["Camel","Llama","Alpaca","Vicuna","Guanaco"],
+    ["Moth","Butterfly","Dragonfly","Damselfly","Mayfly"],
+    ["Ferret","Weasel","Stoat","Mink","Marten"],
+    ["Chick","Hen","Rooster","Peacock","Ostrich"]
   ],
   "Places": [
     ["Taxi rank","Subway","Bus terminal","Train station","Airport"],
@@ -104,7 +128,15 @@ const WORDS = {
     ["Harbor","Dock","Pier","Marina","Wharf"],
     ["Chapel","Church","Cathedral","Temple","Mosque"],
     ["Gym","Spa","Sauna","Steam room","Pool"],
-    ["Bank","Post office","Town hall","Courthouse","Embassy"]
+    ["Bank","Post office","Town hall","Courthouse","Embassy"],
+    ["Alley","Lane","Street","Avenue","Boulevard"],
+    ["Hut","Cabin","Bungalow","Townhouse","Skyscraper"],
+    ["Pond","Fountain","Well","Reservoir","Dam"],
+    ["Bus stop","Layby","Car park","Roundabout","Motorway"],
+    ["Stall","Kiosk","Shop","Supermarket","Mall"],
+    ["Playground","Park","Common","Reserve","National park"],
+    ["Runway","Hangar","Terminal","Control tower","Departure lounge"],
+    ["Crypt","Tomb","Mausoleum","Cemetery","Catacomb"]
   ],
   "Sports": [
     ["Dodgeball","Handball","Volleyball","Netball","Basketball"],
@@ -126,7 +158,69 @@ const WORDS = {
     ["Horse racing","Show jumping","Dressage","Polo","Rodeo"],
     ["Water polo","Synchronised swimming","Freediving","Snorkelling","Surfing"],
     ["Abseiling","Mountaineering","Caving","Hiking","Orienteering"],
-    ["Cheerleading","Acrobatics","Parkour","Breakdancing","Tumbling"]
+    ["Cheerleading","Acrobatics","Parkour","Breakdancing","Tumbling"],
+    ["Yoga","Pilates","Aerobics","Zumba","Spin class"],
+    ["Frisbee","Ultimate","Disc golf","Cornhole","Horseshoes"],
+    ["Freestyle","Backstroke","Breaststroke","Butterfly","Medley"],
+    ["Slalom","Downhill","Cross-country","Ski jump","Biathlon"],
+    ["Sabre","Épée","Foil","Rapier","Kendo"],
+    ["Skipping","Hula hoop","Pogo stick","Jump rope","Hopscotch"]
+  ],
+  "Clothing": [
+    ["Vest","T-shirt","Shirt","Jumper","Coat"],
+    ["Socks","Tights","Leggings","Trousers","Jeans"],
+    ["Sandals","Flip-flops","Trainers","Boots","Heels"],
+    ["Cap","Beanie","Beret","Fedora","Top hat"],
+    ["Scarf","Shawl","Poncho","Cardigan","Cloak"],
+    ["Bikini","Swimsuit","Wetsuit","Leotard","Onesie"],
+    ["Gloves","Mittens","Wristband","Bracelet","Watch"],
+    ["Belt","Braces","Sash","Tie","Bow tie"],
+    ["Apron","Overalls","Dungarees","Boiler suit","Uniform"],
+    ["Slippers","Loafers","Brogues","Oxfords","Clogs"],
+    ["Shorts","Skort","Skirt","Dress","Gown"],
+    ["Hoodie","Sweatshirt","Blazer","Suit jacket","Tuxedo"]
+  ],
+  "Music": [
+    ["Whistle","Recorder","Flute","Clarinet","Oboe"],
+    ["Ukulele","Guitar","Banjo","Mandolin","Sitar"],
+    ["Violin","Viola","Cello","Double bass","Harp"],
+    ["Bongos","Drum","Timpani","Xylophone","Gong"],
+    ["Harmonica","Accordion","Bagpipes","Organ","Piano"],
+    ["Trumpet","Cornet","Trombone","Tuba","French horn"],
+    ["Pop","Rock","Metal","Punk","Grunge"],
+    ["Jazz","Blues","Soul","Funk","Reggae"],
+    ["Techno","House","Trance","Dubstep","Drum and bass"],
+    ["Hymn","Carol","Anthem","Ballad","Opera"],
+    ["Choir","Duet","Solo","Orchestra","Band"],
+    ["Microphone","Amplifier","Speaker","Headphones","Earbuds"]
+  ],
+  "Jobs": [
+    ["Nurse","Paramedic","Doctor","Surgeon","Pharmacist"],
+    ["Waiter","Barista","Chef","Baker","Butcher"],
+    ["Teacher","Tutor","Lecturer","Professor","Principal"],
+    ["Cleaner","Janitor","Caretaker","Plumber","Electrician"],
+    ["Cashier","Salesperson","Manager","Accountant","Banker"],
+    ["Actor","Singer","Dancer","Comedian","Magician"],
+    ["Farmer","Gardener","Vet","Zookeeper","Ranger"],
+    ["Pilot","Cabin crew","Sailor","Captain","Astronaut"],
+    ["Journalist","Author","Editor","Translator","Librarian"],
+    ["Painter","Sculptor","Architect","Designer","Photographer"],
+    ["Police officer","Detective","Firefighter","Soldier","Bodyguard"],
+    ["Carpenter","Bricklayer","Welder","Mechanic","Blacksmith"]
+  ],
+  "Weather & Nature": [
+    ["Breeze","Wind","Gust","Gale","Hurricane"],
+    ["Drizzle","Shower","Rain","Downpour","Thunderstorm"],
+    ["Mist","Fog","Cloud","Overcast","Smog"],
+    ["Frost","Sleet","Snow","Blizzard","Hail"],
+    ["Puddle","Pond","Lake","Sea","Ocean"],
+    ["Hill","Ridge","Mountain","Peak","Summit"],
+    ["Spark","Flame","Fire","Blaze","Inferno"],
+    ["Pebble","Stone","Rock","Boulder","Cliff"],
+    ["Seed","Sprout","Bush","Shrub","Tree"],
+    ["Sunrise","Dawn","Noon","Dusk","Midnight"],
+    ["Stream","Brook","Creek","River","Rapids"],
+    ["Tremor","Earthquake","Landslide","Avalanche","Eruption"]
   ]
 };
 
