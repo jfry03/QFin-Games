@@ -14,40 +14,62 @@
 
 const crypto = require("crypto");
 const fs = require("fs");
+const os = require("os");
 const path = require("path");
-
-const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, "data");
-const USERS_FILE = path.join(DATA_DIR, "accounts.json");
-const SECRET_FILE = path.join(DATA_DIR, "auth-secret");
 
 const SCRYPT = { N: 16384, r: 8, p: 1, keylen: 32 };   // ~solid defaults for a small app
 const TOKEN_TTL_MS = 30 * 24 * 60 * 60 * 1000;          // 30 days
 
-function ensureDir() { fs.mkdirSync(DATA_DIR, { recursive: true }); }
+// Storage is resolved at init() to the first writable directory. If none is
+// writable the module still works, in-memory — accounts just don't persist
+// across restarts, and the server never fails to start because of accounts.
+let dataDir = null;       // resolved writable dir, or null (in-memory only)
+let persistent = false;
+function usersFile() { return path.join(dataDir, "accounts.json"); }
+function secretFile() { return path.join(dataDir, "auth-secret"); }
+
+// Can we create AND write in `dir`? (Permission/read-only/ENOENT all -> false.)
+function dirWritable(dir) {
+  try {
+    fs.mkdirSync(dir, { recursive: true });
+    const probe = path.join(dir, ".wtest-" + process.pid);
+    fs.writeFileSync(probe, "x");
+    fs.unlinkSync(probe);
+    return true;
+  } catch { return false; }
+}
 
 // ---- persistence -----------------------------------------------------------
 let users = {};   // usernameLower -> { username, hash, created }
 function load() {
-  try { users = JSON.parse(fs.readFileSync(USERS_FILE, "utf8")) || {}; }
+  if (!persistent) { users = {}; return; }
+  try { users = JSON.parse(fs.readFileSync(usersFile(), "utf8")) || {}; }
   catch { users = {}; }
 }
 function save() {
-  ensureDir();
-  const tmp = USERS_FILE + ".tmp";
-  fs.writeFileSync(tmp, JSON.stringify(users));
-  fs.renameSync(tmp, USERS_FILE);   // atomic replace
+  if (!persistent) return;   // in-memory mode: keep serving, just don't write
+  try {
+    const tmp = usersFile() + ".tmp";
+    fs.writeFileSync(tmp, JSON.stringify(users));
+    fs.renameSync(tmp, usersFile());   // atomic replace
+  } catch (e) {
+    console.error("auth: could not persist accounts:", e.message);
+  }
 }
 
-// Server secret for signing tokens: env override, else a persisted random one.
+// Server secret for signing tokens: env override, else a persisted random one,
+// else an in-memory random one (tokens then only survive a single run).
 function loadSecret() {
   if (process.env.AUTH_SECRET) return process.env.AUTH_SECRET;
-  try { return fs.readFileSync(SECRET_FILE, "utf8").trim(); }
-  catch {
-    ensureDir();
-    const s = crypto.randomBytes(32).toString("hex");
-    fs.writeFileSync(SECRET_FILE, s, { mode: 0o600 });
-    return s;
+  if (persistent) {
+    try { return fs.readFileSync(secretFile(), "utf8").trim(); } catch {}
+    try {
+      const s = crypto.randomBytes(32).toString("hex");
+      fs.writeFileSync(secretFile(), s, { mode: 0o600 });
+      return s;
+    } catch {}
   }
+  return crypto.randomBytes(32).toString("hex");
 }
 let SECRET = "";
 
@@ -121,6 +143,24 @@ function login(username, password) {
   return { token: sign({ u: acct.username, exp: Date.now() + TOKEN_TTL_MS }), username: acct.username };
 }
 
-function init() { SECRET = loadSecret(); load(); }
+// Resolve storage, then load. Tries DATA_DIR, then <repo>/data, then a temp dir;
+// falls back to in-memory. Wrapped so a bad environment can't crash the server.
+function init() {
+  try {
+    const candidates = [
+      process.env.DATA_DIR,
+      path.join(__dirname, "data"),
+      path.join(os.tmpdir(), "qfin-games-data"),
+    ].filter(Boolean);
+    for (const d of candidates) { if (dirWritable(d)) { dataDir = d; persistent = true; break; } }
+    if (!persistent) console.error("auth: no writable data dir; running in-memory (accounts won't persist). Set DATA_DIR to fix.");
+    else console.error("auth: accounts persisting to " + dataDir);
+  } catch (e) {
+    persistent = false;
+    console.error("auth: storage init failed, running in-memory:", e.message);
+  }
+  SECRET = loadSecret();
+  load();
+}
 
 module.exports = { init, register, login, verifyToken, cleanUsername };
