@@ -619,7 +619,7 @@ function connect() {
   ws = new WebSocket(wsUrl());
   ws.onopen = () => {
     $("statusDot").textContent = "";
-    if (session.code && session.playerId) sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name });
+    if (session.code && session.playerId) sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name, token: acctToken() });
   };
   ws.onmessage = e => onMessage(JSON.parse(e.data));
   ws.onclose = () => { $("statusDot").textContent = "Reconnecting…"; clearTimeout(reconnectTimer); reconnectTimer = setTimeout(connect, 1500); };
@@ -1070,18 +1070,23 @@ $("playerList").onclick = e => {
   if (kick) { const id = kick.getAttribute("data-kick"); const p = roster.find(x => x.id === id); if (confirm("Remove " + (p ? p.name : "this player") + " from the room?")) sendMsg({ type: "kick", target: id }); }
 };
 
+// ---- optional account (shared across tabs) ----
+let account = null;
+try { account = JSON.parse(localStorage.getItem("qfin_account") || "null"); } catch {}
+function acctToken() { return account && account.token ? account.token : undefined; }
+
 // ---- home actions ----
 $("createBtn").onclick = () => {
   const name = $("nameInput").value.trim();
   if (!name) return banner("Enter your name first.");
-  session.name = name; sendMsg({ type: "create", name, game: GAME });
+  session.name = name; sendMsg({ type: "create", name, game: GAME, token: acctToken() });
 };
 $("joinBtn").onclick = () => {
   const name = $("nameInput").value.trim();
   const code = $("codeInput").value.trim().toUpperCase();
   if (!name) return banner("Enter your name first.");
   if (code.length !== 4) return banner("Enter the 4-letter code.");
-  session.name = name; sendMsg({ type: "join", code, name });
+  session.name = name; sendMsg({ type: "join", code, name, token: acctToken() });
 };
 
 // chat
@@ -1095,6 +1100,11 @@ $("leaveBtn").onclick = doLeave;
 $("leaveLink").onclick = doLeave;
 
 if (session.name) $("nameInput").value = session.name;
+if (account && account.username) {
+  $("nameInput").value = account.username;
+  $("nameInput").readOnly = true;
+  session.name = account.username;
+}
 showScreen("home");
 connect();
 </script>

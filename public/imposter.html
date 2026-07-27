@@ -440,7 +440,7 @@ function connect() {
     $("statusDot").textContent = "";
     // If we have a live session, silently rejoin it.
     if (session.code && session.playerId) {
-      sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name });
+      sendMsg({ type: "join", code: session.code, playerId: session.playerId, name: session.name, token: acctToken() });
     }
   };
   ws.onmessage = e => onMessage(JSON.parse(e.data));
@@ -835,12 +835,17 @@ function escapeHtml(s) {
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 }
 
+// ---- optional account (shared across tabs) ----
+let account = null;
+try { account = JSON.parse(localStorage.getItem("qfin_account") || "null"); } catch {}
+function acctToken() { return account && account.token ? account.token : undefined; }
+
 // ---- outgoing (buttons) ----
 $("createBtn").onclick = () => {
   const name = $("nameInput").value.trim();
   if (!name) return banner("Enter your name first.");
   session.name = name;
-  sendMsg({ type: "create", name, game: "imposter" });
+  sendMsg({ type: "create", name, game: "imposter", token: acctToken() });
 };
 $("joinBtn").onclick = () => {
   const name = $("nameInput").value.trim();
@@ -848,7 +853,7 @@ $("joinBtn").onclick = () => {
   if (!name) return banner("Enter your name first.");
   if (code.length !== 4) return banner("Enter the 4-letter code.");
   session.name = name;
-  sendMsg({ type: "join", code, name });
+  sendMsg({ type: "join", code, name, token: acctToken() });
 };
 $("matchModeSeg").onclick = e => {
   const b = e.target.closest("[data-mode]"); if (!b || !amHost()) return;
@@ -952,8 +957,13 @@ $("leaveBtn").onclick = () => {
   showScreen("home");
 };
 
-// Prefill remembered name.
+// Prefill remembered name. If signed in, lock the name to the account username.
 if (session.name) $("nameInput").value = session.name;
+if (account && account.username) {
+  $("nameInput").value = account.username;
+  $("nameInput").readOnly = true;
+  session.name = account.username;
+}
 showScreen("home");
 connect();
 </script>

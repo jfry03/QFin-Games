@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QFin Games — Account</title>
+<style>
+  :root {
+    --bg: #0f1020; --bg2: #1a1b35; --card: #232447; --card2: #2c2d55;
+    --accent: #6c5ce7; --accent2: #a29bfe; --good: #1dd1a1; --danger: #ff6b6b;
+    --text: #f5f6fa; --muted: #9b9cc4; --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text); min-height: 100%; display: flex; justify-content: center;
+  }
+  #app { width: 100%; max-width: 480px; padding: 26px; display: flex; flex-direction: column; min-height: 100vh; }
+  h1 { font-size: 1.8rem; margin: 8px 0 2px; letter-spacing: -0.5px; }
+  h1 .em { color: var(--accent2); }
+  .sub { color: var(--muted); margin: 0 0 24px; font-size: 0.95rem; }
+
+  .tabs { display: flex; gap: 8px; margin-bottom: 20px; }
+  .tabs button { flex: 1; padding: 12px; border: 1.5px solid var(--card); background: var(--card); color: var(--text); border-radius: 12px; font-weight: 700; cursor: pointer; }
+  .tabs button.on { border-color: var(--accent2); background: rgba(108,92,231,0.28); color: var(--accent2); }
+
+  .field { margin-bottom: 16px; }
+  .field label { display: block; font-weight: 600; margin-bottom: 8px; font-size: 0.95rem; }
+  input.text {
+    width: 100%; padding: 15px; border-radius: var(--radius); border: 1.5px solid var(--card);
+    background: var(--card); color: var(--text); font-size: 1.05rem; outline: none;
+  }
+  input.text:focus { border-color: var(--accent2); }
+  .hint { color: var(--muted); font-size: 0.8rem; margin-top: 6px; }
+
+  .btn { display: block; width: 100%; padding: 16px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff; font-size: 1.05rem; font-weight: 700; cursor: pointer; margin-top: 10px; }
+  .btn:active { transform: scale(0.98); }
+  .btn:disabled { opacity: 0.5; }
+  .btn.ghost { background: transparent; color: var(--muted); font-size: 0.95rem; }
+
+  .msg { padding: 12px 14px; border-radius: 12px; font-size: 0.9rem; margin-bottom: 14px; text-align: center; }
+  .msg.err { background: rgba(255,107,107,0.16); color: var(--danger); }
+  .msg.ok { background: rgba(29,209,161,0.16); color: var(--good); }
+
+  .whoami { background: var(--card); border-radius: var(--radius); padding: 20px; text-align: center; margin-bottom: 18px; }
+  .whoami .u { font-size: 1.5rem; font-weight: 800; color: var(--accent2); }
+  .whoami .l { color: var(--muted); font-size: 0.8rem; letter-spacing: 1px; text-transform: uppercase; }
+
+  .footer-note { color: var(--muted); font-size: 0.8rem; text-align: center; margin-top: auto; padding-top: 20px; }
+  .footer-note a { color: var(--accent2); }
+  .hidden { display: none !important; }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>QFin <span class="em">Account</span></h1>
+  <p class="sub">Sign in so your name is remembered across games. Optional — you can still play as a guest.</p>
+
+  <div id="msg" class="msg hidden"></div>
+
+  <!-- Signed in -->
+  <section id="loggedIn" class="hidden">
+    <div class="whoami"><div class="l">Signed in as</div><div class="u" id="whoName">—</div></div>
+    <a class="btn" href="/">← Back to games</a>
+    <button class="btn ghost" id="logoutBtn">Sign out</button>
+  </section>
+
+  <!-- Signed out -->
+  <section id="loggedOut">
+    <div class="tabs">
+      <button id="tabLogin" class="on">Sign in</button>
+      <button id="tabRegister">Create account</button>
+    </div>
+
+    <div class="field">
+      <label>Username</label>
+      <input class="text" id="username" maxlength="20" autocomplete="username" placeholder="3–20 letters, numbers, _">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <input class="text" id="password" type="password" maxlength="200" autocomplete="current-password" placeholder="At least 8 characters">
+      <div class="hint" id="pwHint"></div>
+    </div>
+    <button class="btn" id="submitBtn">Sign in</button>
+    <a class="btn ghost" href="/">Continue as guest →</a>
+  </section>
+
+  <div class="footer-note"><a href="/">← All games</a></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const KEY = "qfin_account";   // shared across tabs so login persists everywhere
+
+let mode = "login";   // "login" | "register"
+
+function getAccount() { try { return JSON.parse(localStorage.getItem(KEY) || "null"); } catch { return null; } }
+function setAccount(a) { localStorage.setItem(KEY, JSON.stringify(a)); }
+function clearAccount() { localStorage.removeItem(KEY); }
+
+function showMsg(text, ok) {
+  const m = $("msg");
+  if (!text) { m.classList.add("hidden"); return; }
+  m.textContent = text;
+  m.className = "msg " + (ok ? "ok" : "err");
+  m.classList.remove("hidden");
+}
+
+function renderSignedIn(username) {
+  $("loggedIn").classList.remove("hidden");
+  $("loggedOut").classList.add("hidden");
+  $("whoName").textContent = username;
+}
+function renderSignedOut() {
+  $("loggedIn").classList.add("hidden");
+  $("loggedOut").classList.remove("hidden");
+}
+
+function setMode(m) {
+  mode = m;
+  $("tabLogin").classList.toggle("on", m === "login");
+  $("tabRegister").classList.toggle("on", m === "register");
+  $("submitBtn").textContent = m === "login" ? "Sign in" : "Create account";
+  $("password").setAttribute("autocomplete", m === "login" ? "current-password" : "new-password");
+  $("pwHint").textContent = m === "register" ? "At least 8 characters." : "";
+  showMsg("");
+}
+$("tabLogin").onclick = () => setMode("login");
+$("tabRegister").onclick = () => setMode("register");
+
+async function submit() {
+  const username = $("username").value.trim();
+  const password = $("password").value;
+  if (!username || !password) return showMsg("Enter a username and password.");
+  $("submitBtn").disabled = true;
+  try {
+    const res = await fetch("/api/" + (mode === "login" ? "login" : "register"), {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    const data = await res.json();
+    if (data.error) { showMsg(data.error); return; }
+    setAccount({ token: data.token, username: data.username });
+    // Straight back to the games with the name remembered.
+    location.href = "/";
+  } catch {
+    showMsg("Network error — try again.");
+  } finally {
+    $("submitBtn").disabled = false;
+  }
+}
+$("submitBtn").onclick = submit;
+$("password").addEventListener("keydown", e => { if (e.key === "Enter") submit(); });
+
+$("logoutBtn").onclick = () => { clearAccount(); renderSignedOut(); showMsg("Signed out.", true); };
+
+// On load: if we have a token, confirm it's still valid with the server.
+(async () => {
+  const acct = getAccount();
+  if (!acct || !acct.token) return renderSignedOut();
+  try {
+    const res = await fetch("/api/me", { headers: { Authorization: "Bearer " + acct.token } });
+    const data = await res.json();
+    if (data.username) { setAccount({ token: acct.token, username: data.username }); renderSignedIn(data.username); }
+    else { clearAccount(); renderSignedOut(); }
+  } catch { renderSignedOut(); }
+})();
+</script>
+</body>
+</html>

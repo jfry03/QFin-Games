@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>QFin — HTH vs HHT (Penney's Game)</title>
+<style>
+  :root {
+    --bg: #0f1020; --bg2: #1a1b35; --card: #232447; --card2: #2c2d55;
+    --accent: #6c5ce7; --accent2: #a29bfe;
+    --hth: #ff9f43;   /* orange — HTH */
+    --hht: #1dd1a1;   /* green  — HHT */
+    --gold: #f6c453; --danger: #ff6b6b;
+    --text: #f5f6fa; --muted: #9b9cc4; --radius: 18px;
+  }
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  html, body { margin: 0; height: 100%; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: radial-gradient(circle at 50% 0%, var(--bg2), var(--bg) 70%);
+    color: var(--text); min-height: 100%; display: flex; justify-content: center;
+  }
+  #app { width: 100%; max-width: 520px; padding: 24px; display: flex; flex-direction: column; min-height: 100vh; }
+  h1 { font-size: 1.6rem; margin: 6px 0 2px; letter-spacing: -0.5px; }
+  h1 .a { color: var(--hth); } h1 .b { color: var(--hht); }
+  .sub { color: var(--muted); margin: 0 0 20px; font-size: 0.92rem; line-height: 1.45; }
+
+  /* coin */
+  .coin-wrap { display: flex; justify-content: center; margin: 10px 0 18px; perspective: 900px; }
+  .coin { width: 128px; height: 128px; position: relative; transform-style: preserve-3d; transition: transform 0.05s linear; }
+  .coin .face {
+    position: absolute; inset: 0; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 3.4rem; font-weight: 800; backface-visibility: hidden; border: 6px solid rgba(255,255,255,0.25);
+    box-shadow: 0 10px 30px rgba(0,0,0,0.4);
+  }
+  .coin .heads { background: radial-gradient(circle at 35% 30%, #ffe08a, #e0a500); color: #5a3d00; }
+  .coin .tails { background: radial-gradient(circle at 35% 30%, #cfd6e6, #8792ad); color: #23293a; transform: rotateY(180deg); }
+  .coin.spin { animation: none; }
+
+  /* sequence strip */
+  .seq { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 14px; min-height: 40px; align-content: flex-start; }
+  .flip { width: 34px; height: 40px; border-radius: 9px; display: flex; align-items: center; justify-content: center;
+    font-weight: 800; font-size: 1.05rem; background: var(--card); border: 2px solid transparent; }
+  .flip.h { color: var(--gold); } .flip.t { color: var(--muted); }
+  .flip.win-hth { border-color: var(--hth); background: rgba(255,159,67,0.18); color: var(--hth); }
+  .flip.win-hht { border-color: var(--hht); background: rgba(29,209,161,0.18); color: var(--hht); }
+  .flip.latest { box-shadow: 0 0 0 2px var(--accent2); }
+
+  .status { text-align: center; font-weight: 700; min-height: 1.4em; margin-bottom: 12px; }
+  .status.hth { color: var(--hth); } .status.hht { color: var(--hht); }
+
+  .btns { display: flex; gap: 10px; margin-bottom: 10px; }
+  .btn { flex: 1; padding: 15px; border: none; border-radius: var(--radius); background: var(--accent); color: #fff;
+    font-size: 1rem; font-weight: 700; cursor: pointer; }
+  .btn:active { transform: scale(0.98); } .btn:disabled { opacity: 0.5; }
+  .btn.sec { background: var(--card); color: var(--text); }
+
+  .card { background: var(--card); border-radius: var(--radius); padding: 18px; margin: 16px 0; }
+  .card h2 { margin: 0 0 12px; font-size: 1rem; }
+
+  /* race result bars */
+  .bar-row { margin-bottom: 12px; }
+  .bar-top { display: flex; justify-content: space-between; font-weight: 700; font-size: 0.9rem; margin-bottom: 5px; }
+  .bar-top .who.hth { color: var(--hth); } .bar-top .who.hht { color: var(--hht); }
+  .bar { height: 22px; background: var(--card2); border-radius: 999px; overflow: hidden; }
+  .bar > div { height: 100%; border-radius: 999px; transition: width 0.3s ease; }
+  .bar > .fhth { background: var(--hth); } .bar > .fhht { background: var(--hht); }
+  .tally { color: var(--muted); font-size: 0.85rem; text-align: center; margin-top: 6px; }
+
+  .simctl { display: flex; gap: 10px; align-items: center; margin-bottom: 12px; }
+  .simctl select { flex: 1; padding: 12px; border-radius: 12px; border: 1.5px solid var(--card2); background: var(--card2); color: var(--text); font-size: 1rem; font-weight: 600; }
+
+  .explain { color: var(--muted); font-size: 0.86rem; line-height: 1.5; }
+  .explain b { color: var(--text); } .explain .hthc { color: var(--hth); font-weight: 700; } .explain .hhtc { color: var(--hht); font-weight: 700; }
+  .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: auto; padding-top: 20px; }
+  .footer-note a { color: var(--accent2); }
+</style>
+</head>
+<body>
+<div id="app">
+  <h1>Race: <span class="a">HTH</span> vs <span class="b">HHT</span></h1>
+  <p class="sub">Flip a fair coin over and over. Which three-in-a-row pattern shows up first? It feels like a coin toss between them — it isn't. (Penney's game.)</p>
+
+  <div class="coin-wrap">
+    <div class="coin" id="coin">
+      <div class="face heads">H</div>
+      <div class="face tails">T</div>
+    </div>
+  </div>
+
+  <div class="status" id="status">Tap “Flip” to start a race.</div>
+  <div class="seq" id="seq"></div>
+
+  <div class="btns">
+    <button class="btn" id="flipBtn">Flip</button>
+    <button class="btn sec" id="autoBtn">Auto</button>
+    <button class="btn sec" id="resetBtn">Reset</button>
+  </div>
+
+  <div class="card">
+    <h2>Simulate many races</h2>
+    <div class="simctl">
+      <select id="simN">
+        <option value="100">100 races</option>
+        <option value="1000" selected>1,000 races</option>
+        <option value="10000">10,000 races</option>
+        <option value="100000">100,000 races</option>
+      </select>
+      <button class="btn" id="simBtn" style="flex:0 0 auto;padding:12px 18px;">Run</button>
+    </div>
+    <div class="bar-row">
+      <div class="bar-top"><span class="who hht">HHT first</span><span id="pctHht">—</span></div>
+      <div class="bar"><div class="fhht" id="barHht" style="width:0%"></div></div>
+    </div>
+    <div class="bar-row">
+      <div class="bar-top"><span class="who hth">HTH first</span><span id="pctHth">—</span></div>
+      <div class="bar"><div class="fhth" id="barHth" style="width:0%"></div></div>
+    </div>
+    <div class="tally" id="tally">Cumulative across all runs this session.</div>
+  </div>
+
+  <div class="card explain">
+    <b>Why isn't it 50/50?</b> Once you flip two heads in a row (<b>HH</b>), the very next tail
+    finishes <span class="hhtc">HHT</span> — but <span class="hthc">HTH</span> can never sneak in first from
+    there, because any tail after those heads completes HHT. That asymmetry tilts the race:
+    <span class="hhtc">HHT</span> wins with probability <b>2/3</b>, <span class="hthc">HTH</span> only <b>1/3</b>.
+    The expected number of flips to first see HTH is 10; for HHT it's 8.
+  </div>
+
+  <div class="footer-note"><a href="/">← QFin Games</a></div>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const HTH = "HTH", HHT = "HHT";
+
+let seq = "";                 // the running string of H/T
+let winner = null;           // "HTH" | "HHT" | null
+let autoTimer = null;
+let spinning = false;
+// session-cumulative simulation tally
+let simHht = 0, simHth = 0;
+
+// ---- coin animation: land on a given face ----
+let baseRot = 0;
+function flipCoinTo(face) {
+  return new Promise(res => {
+    const coin = $("coin");
+    const turns = 3 + Math.floor(Math.random() * 2);          // 3–4 full spins
+    const end = baseRot + turns * 360 + (face === "T" ? 180 : 0);
+    // normalise so we always add forward rotation
+    const target = end - (end % 360) + (face === "T" ? 180 : 0);
+    baseRot = target;
+    coin.style.transition = "transform 0.62s cubic-bezier(.28,.7,.35,1)";
+    coin.style.transform = "rotateY(" + baseRot + "deg)";
+    setTimeout(res, 630);
+  });
+}
+
+function detectWin() {
+  // Whichever pattern's final three letters match, and it's the FIRST time.
+  const last3 = seq.slice(-3);
+  if (last3 === HHT) return HHT;
+  if (last3 === HTH) return HTH;
+  return null;
+}
+
+function renderSeq() {
+  const winStart = winner ? seq.length - 3 : -1;
+  $("seq").innerHTML = [...seq].map((c, i) => {
+    let cls = "flip " + (c === "H" ? "h" : "t");
+    if (winner && i >= winStart) cls += winner === HHT ? " win-hht" : " win-hth";
+    if (i === seq.length - 1 && !winner) cls += " latest";
+    return '<div class="' + cls + '">' + c + '</div>';
+  }).join("");
+}
+
+function setStatus() {
+  const s = $("status");
+  if (winner) {
+    s.className = "status " + (winner === HHT ? "hht" : "hth");
+    s.textContent = "🏁 " + winner + " appears first! (" + seq.length + " flips)";
+  } else if (seq.length) {
+    s.className = "status";
+    s.textContent = seq.length + " flip" + (seq.length === 1 ? "" : "s") + " so far…";
+  } else {
+    s.className = "status";
+    s.textContent = "Tap “Flip” to start a race.";
+  }
+}
+
+async function doFlip() {
+  if (spinning || winner) return;
+  spinning = true;
+  $("flipBtn").disabled = true;
+  const face = Math.random() < 0.5 ? "H" : "T";
+  await flipCoinTo(face);
+  seq += face;
+  winner = detectWin();
+  if (winner) { if (winner === HHT) simHht++; else simHth++; stopAuto(); renderBars(); }
+  renderSeq();
+  setStatus();
+  spinning = false;
+  $("flipBtn").disabled = !!winner;
+}
+
+function reset() {
+  stopAuto();
+  seq = ""; winner = null;
+  renderSeq(); setStatus();
+  $("flipBtn").disabled = false;
+}
+
+function stopAuto() {
+  if (autoTimer) { clearInterval(autoTimer); autoTimer = null; $("autoBtn").textContent = "Auto"; }
+}
+function toggleAuto() {
+  if (autoTimer) { stopAuto(); return; }
+  if (winner) reset();
+  $("autoBtn").textContent = "Stop";
+  autoTimer = setInterval(() => { if (!spinning && !winner) doFlip(); }, 380);
+}
+
+$("flipBtn").onclick = doFlip;
+$("autoBtn").onclick = toggleAuto;
+$("resetBtn").onclick = reset;
+
+// ---- bulk simulation (no animation; pure Monte Carlo) ----
+// One race: flip until the last 3 form HHT or HTH; return the winner.
+function simulateRace() {
+  let a = Math.random() < 0.5 ? 1 : 0;   // flip 1
+  let b = Math.random() < 0.5 ? 1 : 0;   // flip 2  (1 = H, 0 = T)
+  while (true) {
+    const c = Math.random() < 0.5 ? 1 : 0;
+    // HHT = 1,1,0 ; HTH = 1,0,1
+    if (a === 1 && b === 1 && c === 0) return HHT;
+    if (a === 1 && b === 0 && c === 1) return HTH;
+    a = b; b = c;
+  }
+}
+function renderBars() {
+  const total = simHht + simHth;
+  const ph = total ? (simHht / total) : 0, pt = total ? (simHth / total) : 0;
+  $("barHht").style.width = (ph * 100) + "%";
+  $("barHth").style.width = (pt * 100) + "%";
+  $("pctHht").textContent = total ? (ph * 100).toFixed(1) + "%" : "—";
+  $("pctHth").textContent = total ? (pt * 100).toFixed(1) + "%" : "—";
+  $("tally").textContent = total
+    ? simHht.toLocaleString() + " vs " + simHth.toLocaleString() + " over " + total.toLocaleString() + " races  ·  theory: 66.7% / 33.3%"
+    : "Cumulative across all runs this session.";
+}
+$("simBtn").onclick = () => {
+  const n = parseInt($("simN").value, 10);
+  for (let i = 0; i < n; i++) { if (simulateRace() === HHT) simHht++; else simHth++; }
+  renderBars();
+};
+
+renderSeq(); setStatus(); renderBars();
+</script>
+</body>
+</html>

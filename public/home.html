@@ -45,10 +45,17 @@
   .game .meta { margin-top: 12px; font-size: 0.8rem; color: var(--muted); display: flex; gap: 14px; }
   .game .meta b { color: var(--text); font-weight: 700; }
   .footer-note { color: var(--muted); font-size: 0.78rem; text-align: center; margin-top: auto; padding-top: 24px; }
+  .acctbar { display: flex; justify-content: flex-end; align-items: center; gap: 10px; margin-bottom: 6px; font-size: 0.85rem; }
+  .acctbar a { color: var(--accent2); text-decoration: none; font-weight: 700; }
+  .acctbar .who { color: var(--muted); }
+  .acctbar .who b { color: var(--good); }
+  .game.tool .name { color: var(--accent2); }
+  a.game.tool:hover { border-color: var(--accent2); }
 </style>
 </head>
 <body>
 <div id="app">
+  <div class="acctbar" id="acctbar"><a href="/account">Sign in</a></div>
   <div class="brand">
     <h1>QFin <span class="em">Games</span></h1>
     <p class="sub">Pick a game. Everyone joins from their own phone with a room code.</p>
@@ -81,9 +88,35 @@
       <p class="desc">QFin's trading game — go head-to-head on the market. Opens at battleline.qfinuwa.org.</p>
       <div class="meta"><span>Trading · markets</span></div>
     </a>
+
+    <a class="game tool" href="/coinflip">
+      <div class="top">
+        <div class="emoji">🪙</div>
+        <div class="name">Coin Flip Race</div>
+      </div>
+      <p class="desc">HTH vs HHT — watch a coin decide which pattern lands first, then simulate thousands of races. A surprising 2/3 result (Penney's game).</p>
+      <div class="meta"><span>Solo · probability</span></div>
+    </a>
   </div>
 
   <div class="footer-note">QFin UWA · built for game nights</div>
 </div>
+<script>
+// Reflect account status (applies to Imposter & Avalon; Battleline is external).
+const ACCT_KEY = "qfin_account";
+(async () => {
+  let acct = null;
+  try { acct = JSON.parse(localStorage.getItem(ACCT_KEY) || "null"); } catch {}
+  if (!acct || !acct.token) return;
+  try {
+    const r = await fetch("/api/me", { headers: { Authorization: "Bearer " + acct.token } });
+    const d = await r.json();
+    if (d.username) {
+      document.getElementById("acctbar").innerHTML =
+        '<span class="who">Signed in as <b>' + d.username.replace(/[&<>"]/g, "") + '</b></span> · <a href="/account">Account</a>';
+    } else { localStorage.removeItem(ACCT_KEY); }
+  } catch {}
+})();
+</script>
 </body>
 </html>

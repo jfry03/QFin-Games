@@ -15,6 +15,8 @@ const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
 const { WebSocketServer } = require("ws");
+const accounts = require("./auth");
+accounts.init();
 
 const PORT = process.env.PORT || 3000;
 const PUBLIC_DIR = path.join(__dirname, "public");
@@ -147,9 +149,9 @@ const GAMES = {
 
 function handle(ws, msg) {
   switch (msg.type) {
-    case "create": return onJoin(ws, { name: msg.name, gameId: msg.game });
-    case "join":   return onJoin(ws, { name: msg.name, code: msg.code, playerId: msg.playerId });
-    case "rejoin": return onJoin(ws, { code: msg.code, playerId: msg.playerId, rejoinOnly: true });
+    case "create": return onJoin(ws, { name: msg.name, gameId: msg.game, token: msg.token });
+    case "join":   return onJoin(ws, { name: msg.name, code: msg.code, playerId: msg.playerId, token: msg.token });
+    case "rejoin": return onJoin(ws, { code: msg.code, playerId: msg.playerId, rejoinOnly: true, token: msg.token });
     case "chat":   return onChat(ws, msg);
     case "kick":   return onKick(ws, msg);
     case "leave":  return onLeave(ws);
@@ -161,7 +163,7 @@ function handle(ws, msg) {
   }
 }
 
-function onJoin(ws, { name, code, playerId, gameId, rejoinOnly }) {
+function onJoin(ws, { name, code, playerId, gameId, rejoinOnly, token }) {
   let room;
   if (code) {
     room = rooms.get(code.toUpperCase());
@@ -170,16 +172,23 @@ function onJoin(ws, { name, code, playerId, gameId, rejoinOnly }) {
     room = createRoom(gameId);
   }
 
+  // If a valid account token is supplied, the player's display name is forced to
+  // the verified username — you can't play under an account name you don't own.
+  const acct = token ? accounts.verifyToken(token) : null;
+  const forcedName = acct ? acct.username : null;
+  ws.account = acct ? acct.username : null;
+
   // Reconnect path: known player rejoining (e.g. after a phone screen lock).
   let player = playerId ? room.players.get(playerId) : null;
   if (player) {
     player.ws = ws;
     player.connected = true;
-    if (name) player.name = name;
+    if (forcedName) player.name = forcedName;
+    else if (name) player.name = name;
   } else {
     if (rejoinOnly) return send(ws, { type: "error", code: "gone", message: "That session expired." });
-    const cleanName = (name || "Player").toString().trim().slice(0, 20) || "Player";
-    player = { id: newId(), name: cleanName, ws, connected: true };
+    const cleanName = (forcedName || (name || "Player").toString().trim().slice(0, 20) || "Player");
+    player = { id: newId(), name: cleanName, account: ws.account, ws, connected: true };
     room.game.initPlayer(room, player);
     room.players.set(player.id, player);
   }
@@ -264,10 +273,41 @@ const ROUTES = {
   "/imposter": "/imposter.html",
   "/avalon": "/avalon.html",
   "/teams": "/teams.html",
+  "/account": "/account.html",
+  "/coinflip": "/coinflip.html",
 };
+
+function sendJson(res, status, obj) {
+  const body = JSON.stringify(obj);
+  res.writeHead(status, { "Content-Type": "application/json", "Cache-Control": "no-store" });
+  res.end(body);
+}
+
+// Account API: register / login / me. Bodies are small JSON POSTs.
+function handleApi(req, res, urlPath) {
+  if (req.method === "GET" && urlPath === "/api/me") {
+    const auth = req.headers["authorization"] || "";
+    const token = auth.startsWith("Bearer ") ? auth.slice(7) : "";
+    const who = accounts.verifyToken(token);
+    return sendJson(res, 200, who ? { username: who.username } : { username: null });
+  }
+  if (req.method === "POST" && (urlPath === "/api/register" || urlPath === "/api/login")) {
+    let body = "";
+    req.on("data", c => { body += c; if (body.length > 4096) req.destroy(); });
+    req.on("end", () => {
+      let msg; try { msg = JSON.parse(body || "{}"); } catch { return sendJson(res, 400, { error: "Bad request." }); }
+      const fn = urlPath === "/api/register" ? accounts.register : accounts.login;
+      const out = fn(msg.username, msg.password);
+      return sendJson(res, out.error ? 400 : 200, out);
+    });
+    return;
+  }
+  return sendJson(res, 404, { error: "Not found." });
+}
 
 const server = http.createServer((req, res) => {
   let urlPath = decodeURIComponent(req.url.split("?")[0]);
+  if (urlPath.startsWith("/api/")) return handleApi(req, res, urlPath);
   if (ROUTES[urlPath]) urlPath = ROUTES[urlPath];
   // Resolve within PUBLIC_DIR and reject path traversal.
   const filePath = path.join(PUBLIC_DIR, urlPath);
