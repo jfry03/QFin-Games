@@ -66,6 +66,11 @@
     font-weight: 800; font-size: 1.6rem;
   }
 
+  .seg { display: flex; gap: 8px; }
+  .seg button { flex: 1; padding: 12px; border: 1.5px solid var(--card); background: var(--card); color: var(--text); border-radius: 12px; font-weight: 700; cursor: pointer; }
+  .seg button.on { border-color: var(--accent2); background: rgba(108,92,231,0.28); color: var(--accent2); }
+  .seg button.dim { opacity: 0.5; }
+  .seg button:disabled { cursor: default; }
   .sim-label {
     float: right; font-weight: 700; color: var(--accent2);
     background: var(--card); padding: 2px 12px; border-radius: 999px; font-size: 0.85rem;
@@ -269,6 +274,14 @@
         <button class="seg-btn" id="modeInPerson">Just assign<br>words</button>
       </div>
       <div class="hint" id="modeHint">Full game on phones: clues, voting and the reveal all happen here.</div>
+    </div>
+    <div class="field" id="matchModeField">
+      <label>Similarity source</label>
+      <div class="seg" id="matchModeSeg">
+        <button data-mode="clusters" id="mmClusters">Hand-picked</button>
+        <button data-mode="embedding" id="mmEmbedding">Embedding</button>
+      </div>
+      <div class="hint" id="matchModeHint"></div>
     </div>
     <div class="field" id="simField">
       <label>Word similarity <span class="sim-label" id="simLabel">Close</span></label>
@@ -576,6 +589,18 @@ function renderLobby() {
   $("simRange").value = state.similarity;
   $("simLabel").textContent = SIM_LABELS[state.similarity];
   $("simRange").disabled = !host;
+
+  // Similarity source: hand-picked clusters vs embedding vectors.
+  const mode = state.matchMode || "clusters";
+  const embOK = !!state.embeddingAvailable;
+  $("mmClusters").classList.toggle("on", mode === "clusters");
+  $("mmEmbedding").classList.toggle("on", mode === "embedding");
+  $("mmClusters").disabled = $("mmEmbedding").disabled = !host;
+  $("mmEmbedding").classList.toggle("dim", !embOK);
+  $("matchModeHint").textContent = mode === "embedding"
+    ? "Imposter's word is picked by embedding similarity across the whole word list."
+    : (embOK ? "Imposter's word comes from a hand-ordered theme cluster."
+             : "Embedding mode needs word-vectors.json (run scripts/build-word-vectors.js).");
   // Rounds/laps only matter for on-phone clue-giving.
   $("roundsField").classList.toggle("hidden", inPerson);
   $("rDisp").textContent = state.laps;
@@ -824,6 +849,10 @@ $("joinBtn").onclick = () => {
   if (code.length !== 4) return banner("Enter the 4-letter code.");
   session.name = name;
   sendMsg({ type: "join", code, name });
+};
+$("matchModeSeg").onclick = e => {
+  const b = e.target.closest("[data-mode]"); if (!b || !amHost()) return;
+  sendMsg({ type: "settings", matchMode: b.getAttribute("data-mode") });
 };
 $("simRange").oninput = e => {
   $("simLabel").textContent = SIM_LABELS[e.target.value];

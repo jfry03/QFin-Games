@@ -248,25 +248,17 @@ function sampleOffCount(pNone, lambda, maxOff) {
 
 // Returns an array of length `playerCount`: each entry { imposter, word }.
 // `wantOff` is how many players should get an adjacent word (0..playerCount-1).
-function buildRound(playerCount, similarity, wantOff) {
-  const cluster = pick(ALL_CLUSTERS);
-  const ci = Math.floor(Math.random() * cluster.length);
-  const crewWord = cluster[ci];
-
-  const candidates = cluster
-    .map((w, i) => ({ w, d: Math.abs(i - ci) }))
-    .filter(o => o.d > 0)
-    .sort((a, b) => a.d - b.d)
-    .map(o => o.w);
-
-  const frac = (5 - similarity) / 4;                 // 0..1
-  const pos = candidates.length ? Math.round(frac * (candidates.length - 1)) : 0;
-  const imposterWords = candidates.length
-    ? [candidates[pos], ...candidates.filter((_, i) => i !== pos)]
+// Given the crew word and a distance-ordered list of candidate imposter words
+// (nearest first), deal roles to `playerCount` players.
+function assignRoles(playerCount, crewWord, imposterWords, wantOff, similarity) {
+  const frac = (5 - similarity) / 4;                 // 0..1  (5 = closest, 1 = furthest)
+  const pos = imposterWords.length ? Math.round(frac * (imposterWords.length - 1)) : 0;
+  // Put the slider-chosen word first, then the rest (for extra imposters).
+  const ordered = imposterWords.length
+    ? [imposterWords[pos], ...imposterWords.filter((_, i) => i !== pos)]
     : [crewWord];
 
-  const nImposters = Math.max(0, Math.min(wantOff, playerCount - 1, imposterWords.length));
-
+  const nImposters = Math.max(0, Math.min(wantOff, playerCount - 1, ordered.length));
   const idx = [...Array(playerCount).keys()];
   for (let i = idx.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
@@ -274,7 +266,7 @@ function buildRound(playerCount, similarity, wantOff) {
   }
   const imposters = idx.slice(0, nImposters);
   const wordFor = {};
-  imposters.forEach((p, i) => { wordFor[p] = imposterWords[i]; });
+  imposters.forEach((p, i) => { wordFor[p] = ordered[i]; });
 
   const roles = [];
   for (let p = 0; p < playerCount; p++) {
@@ -283,6 +275,45 @@ function buildRound(playerCount, similarity, wantOff) {
   }
   return roles;
 }
+
+// Hand-ordered mode: pick a themed cluster; the imposter word's distance from
+// the crew word along the cluster gradient is set by the similarity slider.
+function buildRound(playerCount, similarity, wantOff) {
+  const cluster = pick(ALL_CLUSTERS);
+  const ci = Math.floor(Math.random() * cluster.length);
+  const crewWord = cluster[ci];
+  const candidates = cluster
+    .map((w, i) => ({ w, d: Math.abs(i - ci) }))
+    .filter(o => o.d > 0)
+    .sort((a, b) => a.d - b.d)
+    .map(o => o.w);
+  return assignRoles(playerCount, crewWord, candidates, wantOff, similarity);
+}
+
+// Embedding mode: pick any crew word, rank the rest of the vocabulary by cosine
+// similarity (dot product of unit vectors), and take the imposter word from the
+// similarity band the slider selects — within the word's nearest neighbours so
+// it stays thematically plausible.
+function dot(a, b) { let s = 0; for (let i = 0; i < a.length; i++) s += a[i] * b[i]; return s; }
+function buildRoundEmbedding(playerCount, similarity, wantOff, VEC) {
+  const words = Object.keys(VEC);
+  const crewWord = pick(words);
+  const cv = VEC[crewWord];
+  const scored = words.filter(w => w !== crewWord)
+    .map(w => ({ w, s: dot(cv, VEC[w]) }))
+    .sort((a, b) => b.s - a.s);
+  const pool = scored.slice(0, Math.min(60, scored.length)).map(o => o.w);  // nearest neighbours
+  return assignRoles(playerCount, crewWord, pool, wantOff, similarity);
+}
+
+// Optional precomputed unit word-vectors for embedding mode, built offline from
+// an open-source model (see scripts/build-word-vectors.js). Absent = clusters only.
+let VEC = null;
+try {
+  VEC = require("./word-vectors.json");
+  if (!VEC || typeof VEC !== "object" || Object.keys(VEC).length < 10) VEC = null;
+} catch { VEC = null; }
+const EMBEDDING_AVAILABLE = !!VEC;
 
 // ---------------------------------------------------------------------------
 // Module
@@ -300,7 +331,7 @@ module.exports = (api) => {
     room.g = {
       // dist: zero-modified Poisson for how many players get an off word
       // (pNone = chance nobody is off; lambda = shape of the >=1 tail).
-      settings: { similarity: 4, laps: 2, inPerson: false, dist: { pNone: 0.07, lambda: 0.91 } },
+      settings: { similarity: 4, laps: 2, inPerson: false, matchMode: "clusters", dist: { pNone: 0.07, lambda: 0.91 } },
       order: [],            // playerIds in clue-giving turn order
       turnIndex: 0,         // whose turn it is within order
       lap: 0,               // which clue lap (round) we're on, 0-based
@@ -320,6 +351,8 @@ module.exports = (api) => {
       similarity: g.settings.similarity,
       laps: g.settings.laps,
       inPerson: g.settings.inPerson,
+      matchMode: g.settings.matchMode,
+      embeddingAvailable: EMBEDDING_AVAILABLE,
       dist: { pNone: g.settings.dist.pNone, lambda: g.settings.dist.lambda },
       lap: g.lap,
       order: g.order,
@@ -381,6 +414,9 @@ module.exports = (api) => {
       s.dist.pNone = msg.pNone;
     if (typeof msg.lambda === "number" && msg.lambda >= 0.05 && msg.lambda <= 5)
       s.dist.lambda = msg.lambda;
+    // Similarity source: hand-ordered clusters, or embedding vectors (if built).
+    if (msg.matchMode === "clusters" || msg.matchMode === "embedding")
+      s.matchMode = (msg.matchMode === "embedding" && !EMBEDDING_AVAILABLE) ? "clusters" : msg.matchMode;
     broadcastState(room);
   }
 
@@ -397,7 +433,9 @@ module.exports = (api) => {
     const wantOff = g.settings.inPerson
       ? sampleOffCount(g.settings.dist.pNone, g.settings.dist.lambda, players.length - 1)
       : 1;
-    const roles = buildRound(players.length, g.settings.similarity, wantOff);
+    const roles = (g.settings.matchMode === "embedding" && VEC)
+      ? buildRoundEmbedding(players.length, g.settings.similarity, wantOff, VEC)
+      : buildRound(players.length, g.settings.similarity, wantOff);
     room.phase = g.settings.inPerson ? "assigned" : "round";
     g.clues = [];
     g.turnIndex = 0;
